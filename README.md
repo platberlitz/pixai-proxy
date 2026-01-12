@@ -1,6 +1,13 @@
 # PixAI Reverse Proxy
 
-A simple proxy server that translates OpenAI-compatible image generation requests to PixAI's GraphQL API.
+A proxy server with web UI that translates OpenAI-compatible image generation requests to PixAI's GraphQL API.
+
+## Features
+
+- 🔐 Login-protected web dashboard
+- 🎨 Built-in image generation UI with style presets
+- 🔌 OpenAI-compatible API endpoint for external tools
+- 📱 Mobile-friendly interface
 
 ## Setup
 
@@ -11,11 +18,30 @@ npm install
 npm start
 ```
 
-Server runs on port 3000 by default. Set `PORT` env var to change.
+## Configuration
 
-## Usage
+Set environment variables:
 
-**Endpoint:** `POST /v1/images/generations`
+```bash
+export ADMIN_USER=myusername
+export ADMIN_PASS=mypassword
+export SESSION_SECRET=random-secret-string
+export PORT=3000
+```
+
+Default login: `admin` / `admin` (change this!)
+
+## Web UI
+
+Visit `http://localhost:3000` to access the dashboard:
+- Enter your PixAI API key
+- Write prompts and generate images
+- Choose from style presets
+- Download generated images
+
+## API Endpoint
+
+`POST /v1/images/generations`
 
 **Headers:**
 - `Authorization: Bearer YOUR_PIXAI_API_KEY`
@@ -31,20 +57,6 @@ Server runs on port 3000 by default. Set `PORT` env var to change.
 }
 ```
 
-**Response:**
-```json
-{
-  "data": [{ "url": "https://imagedelivery.net/..." }]
-}
-```
-
-## Get PixAI API Key
-
-1. Go to https://pixai.art
-2. Sign in/create account
-3. Go to Settings → API
-4. Generate API key
-
 ## Deploy on Oracle Cloud Free VM
 
 ```bash
@@ -52,26 +64,27 @@ Server runs on port 3000 by default. Set `PORT` env var to change.
 sudo apt update
 sudo apt install -y nodejs npm
 
-# Clone and run
+# Clone and setup
 git clone https://github.com/platberlitz/pixai-proxy.git
 cd pixai-proxy
 npm install
 
-# Run with PM2 (recommended)
+# Set credentials
+export ADMIN_USER=yourusername
+export ADMIN_PASS=yourpassword
+export SESSION_SECRET=$(openssl rand -hex 32)
+
+# Run with PM2
 sudo npm install -g pm2
 pm2 start server.js --name pixai-proxy
 pm2 save
 pm2 startup
-
-# Or run directly
-PORT=3000 node server.js
 ```
 
-Open port 3000 in Oracle Cloud security list/firewall.
+Open port 3000 in Oracle Cloud security list.
 
 ## Use with SillyTavern Quick Image Gen
 
 - Provider: Reverse Proxy
 - URL: `http://YOUR_VM_IP:3000/v1/images/generations`
 - API Key: Your PixAI API key
-- Model: PixAI model ID (optional)
