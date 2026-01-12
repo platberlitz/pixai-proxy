@@ -128,6 +128,13 @@ Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2
 </div>
 
 <script>
+const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style'];
+function save() { fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value)); }
+function load() { fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v) document.getElementById(f).value = v; }); applyRes(); }
+window.onload = load;
+fields.forEach(f => document.getElementById(f)?.addEventListener('change', save));
+fields.forEach(f => document.getElementById(f)?.addEventListener('input', save));
+
 function applyRes() {
     const v = document.getElementById('resolution').value;
     document.getElementById('customRes').style.display = v === 'custom' ? 'flex' : 'none';
