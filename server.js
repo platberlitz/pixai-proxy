@@ -93,9 +93,10 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <div id="result"></div>
 
 <div class="info">
-<strong>API Endpoint:</strong> <code>POST ${location.origin}/v1/images/generations</code><br><br>
-Use with SillyTavern Quick Image Gen: set Proxy URL to <code>${location.origin}/v1/images/generations</code>
+<strong>API Endpoint:</strong> <code>POST <span id="endpoint"></span>/v1/images/generations</code><br><br>
+Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2"></span>/v1/images/generations</code>
 </div>
+<script>document.getElementById('endpoint').textContent=location.origin;document.getElementById('endpoint2').textContent=location.origin;</script>
 </div>
 
 <script>
