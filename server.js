@@ -99,6 +99,12 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <label>Negative Prompt</label>
 <textarea id="negative">lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, deformed, ugly, duplicate, morbid, mutilated, out of frame, mutation, disfigured, poorly drawn hands, poorly drawn face, extra limbs, malformed limbs, fused fingers, too many fingers, long neck</textarea>
 
+<label>Image URL (for img2img, optional)</label>
+<input id="imgUrl" placeholder="https://... or leave empty for txt2img">
+<div class="row">
+<div><label>Img2Img Strength</label><input type="number" id="imgStrength" value="0.7" min="0.1" max="1" step="0.1"></div>
+</div>
+
 <label>LoRAs (id:weight, comma-separated)</label>
 <input id="loras" placeholder="1744880666293972790:0.7">
 
@@ -223,7 +229,7 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <script>
 document.getElementById('endpoint').textContent=location.origin;
 
-const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','sampler','steps','cfg','seed'];
+const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','sampler','steps','cfg','seed','imgUrl','imgStrength'];
 const checkboxes = ['facefix','tile'];
 
 function save() { 
@@ -421,6 +427,7 @@ async function generate(addQueue = false) {
     
     const upscale = parseFloat(document.getElementById('upscale').value);
     const seed = parseInt(document.getElementById('seed').value);
+    const imgUrl = document.getElementById('imgUrl').value.trim();
     const promptText = style + document.getElementById('prompt').value;
     const body = {
         prompt: promptText,
@@ -435,12 +442,14 @@ async function generate(addQueue = false) {
         seed: seed >= 0 ? seed : undefined,
         facefix: document.getElementById('facefix').checked,
         upscale: upscale > 1 ? upscale : undefined,
-        tile: document.getElementById('tile').checked || undefined
+        tile: document.getElementById('tile').checked || undefined,
+        image_url: imgUrl || undefined,
+        strength: imgUrl ? parseFloat(document.getElementById('imgStrength').value) : undefined
     };
     if (Object.keys(loraObj).length) body.loras = loraObj;
     
     try {
-        status.textContent = '⏳ Generating ' + count + ' image(s)...';
+        status.textContent = '⏳ Generating ' + count + ' image(s)...' + (imgUrl ? ' (img2img)' : '');
         const res = await fetch('/v1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
@@ -467,7 +476,7 @@ renderQueue();
 
 // API endpoint
 const handleGenerate = async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile, steps, cfg_scale, sampler, seed } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile, steps, cfg_scale, sampler, seed, image_url, strength } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
@@ -485,6 +494,7 @@ const handleGenerate = async (req, res) => {
         if (cfg_scale) params.cfgScale = cfg_scale;
         if (sampler) params.samplingMethod = sampler;
         if (seed !== undefined && seed >= 0) params.seed = seed;
+        if (image_url) { params.mediaUrl = image_url; params.strength = strength || 0.7; }
         
         if (loras) {
             if (Array.isArray(loras)) {
