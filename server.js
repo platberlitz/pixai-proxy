@@ -120,6 +120,10 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </select></div>
 </div>
 
+<label class="checkbox_label" style="margin-top:12px">
+<input type="checkbox" id="facefix"> Enable Face Fix (ADetailer) - uses extra credits
+</label>
+
 <button onclick="generate()" id="genBtn">🎨 Generate Images</button>
 <div id="status"></div>
 </div>
@@ -135,11 +139,19 @@ Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2
 
 <script>
 const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style'];
-function save() { fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value)); }
-function load() { fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v) document.getElementById(f).value = v; }); applyRes(); }
+function save() { 
+    fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value));
+    localStorage.setItem('pixai_facefix', document.getElementById('facefix').checked);
+}
+function load() { 
+    fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v) document.getElementById(f).value = v; });
+    document.getElementById('facefix').checked = localStorage.getItem('pixai_facefix') === 'true';
+    applyRes();
+}
 window.onload = load;
 fields.forEach(f => document.getElementById(f)?.addEventListener('change', save));
 fields.forEach(f => document.getElementById(f)?.addEventListener('input', save));
+document.getElementById('facefix')?.addEventListener('change', save);
 
 function applyRes() {
     const v = document.getElementById('resolution').value;
@@ -178,7 +190,8 @@ async function generate() {
         width: parseInt(document.getElementById('width').value),
         height: parseInt(document.getElementById('height').value),
         model: document.getElementById('model').value,
-        n: count
+        n: count,
+        facefix: document.getElementById('facefix').checked
     };
     if (Object.keys(loraObj).length) body.loras = loraObj;
     
@@ -206,7 +219,7 @@ async function generate() {
 
 // API endpoint
 const handleGenerate = async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
@@ -230,6 +243,7 @@ const handleGenerate = async (req, res) => {
                 params.lora = loras;
             }
         }
+        if (facefix) params.enableADetailer = true;
         
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST',
