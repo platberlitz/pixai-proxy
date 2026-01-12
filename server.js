@@ -220,7 +220,16 @@ const handleGenerate = async (req, res) => {
             batchSize: Math.min(n, 4)
         };
         if (negative_prompt) params.negativePrompts = negative_prompt;
-        if (loras && Object.keys(loras).length) params.lora = loras;
+        
+        // Handle loras as array [{id, weight}] or object {id: weight}
+        if (loras) {
+            if (Array.isArray(loras)) {
+                params.lora = {};
+                loras.forEach(l => { if (l.id) params.lora[l.id] = l.weight || 0.7; });
+            } else if (Object.keys(loras).length) {
+                params.lora = loras;
+            }
+        }
         
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST',
