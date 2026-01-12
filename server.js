@@ -49,28 +49,56 @@ textarea{resize:vertical;min-height:80px}
 .row{display:flex;gap:12px}.row>*{flex:1}
 button{padding:12px 24px;background:#e94560;border:none;border-radius:6px;color:#fff;font-size:16px;cursor:pointer;margin-top:16px}
 button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
-#result{margin-top:20px;text-align:center}
-#result img{max-width:100%;border-radius:8px;margin-top:10px}
+#result{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+#result img{max-width:100%;border-radius:8px}
 #status{padding:12px;background:#0f0f23;border-radius:6px;margin-top:12px;display:none}
 .info{background:#0f0f23;padding:12px;border-radius:6px;font-size:13px;color:#888;margin-top:12px}
 .info code{background:#1a1a2e;padding:2px 6px;border-radius:4px;color:#e94560}
+.img-card{background:#0f0f23;padding:8px;border-radius:8px;text-align:center}
+.img-card a{color:#e94560;font-size:12px}
 </style></head><body>
 <div class="container">
 <div class="header"><div><h1>🎨 PixAI Proxy</h1><small style="color:#666">Image Generation Dashboard</small></div><a href="/logout" class="logout">Logout</a></div>
 
 <div class="card">
 <label>PixAI API Key</label>
-<input type="password" id="apiKey" placeholder="Get from pixai.art/settings/api">
+<input type="password" id="apiKey" placeholder="Get from pixai.art/en/profile/edit/api">
 
 <label>Prompt</label>
-<textarea id="prompt" placeholder="a cute anime girl, detailed, colorful"></textarea>
+<textarea id="prompt" placeholder="describe your image">masterpiece, best quality, highly detailed, sharp focus, </textarea>
 
 <label>Negative Prompt</label>
-<textarea id="negative" placeholder="bad quality, blurry, deformed">lowres, bad anatomy, bad hands, text, error, worst quality, low quality, blurry</textarea>
+<textarea id="negative">lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, deformed, ugly, duplicate, morbid, mutilated, out of frame, mutation, disfigured, poorly drawn hands, poorly drawn face, extra limbs, malformed limbs, fused fingers, too many fingers, long neck</textarea>
+
+<label>LoRAs (comma-separated: id:weight, e.g. 123456:0.8, 789012:0.6)</label>
+<input id="loras" placeholder="lora_id:weight, lora_id:weight">
 
 <div class="row">
+<div><label>Resolution</label>
+<select id="resolution" onchange="applyRes()">
+<option value="512x512">512×512 (Square)</option>
+<option value="512x768" selected>512×768 (Portrait)</option>
+<option value="768x512">768×512 (Landscape)</option>
+<option value="640x640">640×640 (Square HD)</option>
+<option value="640x960">640×960 (Portrait HD)</option>
+<option value="960x640">960×640 (Landscape HD)</option>
+<option value="768x768">768×768 (Square XL)</option>
+<option value="768x1024">768×1024 (Portrait XL)</option>
+<option value="1024x768">1024×768 (Landscape XL)</option>
+<option value="1024x1024">1024×1024 (Square Max)</option>
+<option value="custom">Custom</option>
+</select></div>
+<div><label>Count</label>
+<select id="count">
+<option value="1">1 image</option>
+<option value="2">2 images</option>
+<option value="4" selected>4 images</option>
+</select></div>
+</div>
+
+<div class="row" id="customRes" style="display:none">
 <div><label>Width</label><input type="number" id="width" value="512" step="64" min="256" max="1024"></div>
-<div><label>Height</label><input type="number" id="height" value="512" step="64" min="256" max="1024"></div>
+<div><label>Height</label><input type="number" id="height" value="768" step="64" min="256" max="1024"></div>
 </div>
 
 <div class="row">
@@ -86,7 +114,7 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </select></div>
 </div>
 
-<button onclick="generate()" id="genBtn">🎨 Generate Image</button>
+<button onclick="generate()" id="genBtn">🎨 Generate Images</button>
 <div id="status"></div>
 </div>
 
@@ -100,73 +128,93 @@ Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2
 </div>
 
 <script>
+function applyRes() {
+    const v = document.getElementById('resolution').value;
+    document.getElementById('customRes').style.display = v === 'custom' ? 'flex' : 'none';
+    if (v !== 'custom') {
+        const [w,h] = v.split('x');
+        document.getElementById('width').value = w;
+        document.getElementById('height').value = h;
+    }
+}
+
 async function generate() {
     const btn = document.getElementById('genBtn');
     const status = document.getElementById('status');
     const result = document.getElementById('result');
     const apiKey = document.getElementById('apiKey').value;
     const style = document.getElementById('style').value;
+    const count = parseInt(document.getElementById('count').value);
     
     if (!apiKey) return alert('Enter your PixAI API key');
     if (!document.getElementById('prompt').value) return alert('Enter a prompt');
     
     btn.disabled = true;
-    btn.textContent = 'Generating...';
     status.style.display = 'block';
-    status.textContent = '⏳ Creating task...';
     result.innerHTML = '';
     
+    const loras = document.getElementById('loras').value.split(',').filter(l => l.trim()).map(l => {
+        const [id, weight] = l.trim().split(':');
+        return { id: id.trim(), weight: parseFloat(weight) || 0.8 };
+    });
+    
+    const body = {
+        prompt: style + document.getElementById('prompt').value,
+        negative_prompt: document.getElementById('negative').value,
+        width: parseInt(document.getElementById('width').value),
+        height: parseInt(document.getElementById('height').value),
+        model: document.getElementById('model').value,
+        n: count
+    };
+    if (loras.length) body.loras = loras;
+    
     try {
+        status.textContent = '⏳ Creating ' + count + ' image(s)...';
         const res = await fetch('/v1/images/generations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-            body: JSON.stringify({
-                prompt: style + document.getElementById('prompt').value,
-                negative_prompt: document.getElementById('negative').value,
-                width: parseInt(document.getElementById('width').value),
-                height: parseInt(document.getElementById('height').value),
-                model: document.getElementById('model').value
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        if (data.data?.[0]?.url) {
+        if (data.data?.length) {
             status.textContent = '✅ Done!';
-            result.innerHTML = '<img src="' + data.data[0].url + '"><br><a href="' + data.data[0].url + '" download style="color:#e94560">Download</a>';
-        } else throw new Error('No image returned');
+            result.innerHTML = data.data.map(d => '<div class="img-card"><img src="' + d.url + '"><br><a href="' + d.url + '" download>Download</a></div>').join('');
+        } else throw new Error('No images returned');
     } catch(e) {
         status.textContent = '❌ Error: ' + e.message;
     } finally {
         btn.disabled = false;
-        btn.textContent = '🎨 Generate Image';
     }
 }
 </script></body></html>`));
 
 // API endpoint
 app.post('/v1/images/generations', async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 512, model } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 512, model, n = 1, loras } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
     
     try {
+        const input = {
+            prompts: prompt,
+            negativePrompts: negative_prompt || '',
+            width, height,
+            modelId: model || '1648918127446573124',
+            samplingSteps: 25,
+            cfgScale: 7,
+            batchSize: Math.min(n, 4)
+        };
+        if (loras?.length) input.lpiLoraConfigs = loras.map(l => ({ loraId: l.id, weight: l.weight }));
+        
         const createRes = await fetch(PIXAI_API, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
                 query: `mutation($input: GenerateImageInput!) { generateImage(input: $input) { task { id } } }`,
-                variables: {
-                    input: {
-                        prompts: prompt,
-                        negativePrompts: negative_prompt || '',
-                        width, height,
-                        modelId: model || '1648918127446573124',
-                        samplingSteps: 25,
-                        cfgScale: 7
-                    }
-                }
+                variables: { input }
             })
         });
         
@@ -189,9 +237,9 @@ app.post('/v1/images/generations', async (req, res) => {
             const statusData = await statusRes.json();
             const task = statusData.data?.task;
             
-            if (task?.status === 'completed' && task.outputs?.[0]?.mediaId) {
+            if (task?.status === 'completed' && task.outputs?.length) {
                 return res.json({
-                    data: [{ url: `https://imagedelivery.net/5ejkUOtsMH5sf63fw6q33Q/${task.outputs[0].mediaId}/public` }]
+                    data: task.outputs.map(o => ({ url: `https://imagedelivery.net/5ejkUOtsMH5sf63fw6q33Q/${o.mediaId}/public` }))
                 });
             }
             if (task?.status === 'failed') throw new Error('Generation failed');
