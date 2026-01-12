@@ -57,34 +57,9 @@ Visit `http://localhost:3000` to access the dashboard:
 }
 ```
 
-## Deploy on Oracle Cloud Free VM
+## Get PixAI API Key
 
-```bash
-# Install Node.js
-sudo apt update
-sudo apt install -y nodejs npm
-
-# Clone and setup
-git clone https://github.com/platberlitz/pixai-proxy.git
-cd pixai-proxy
-npm install
-
-# Set credentials
-export ADMIN_USER=yourusername
-export ADMIN_PASS=yourpassword
-export SESSION_SECRET=$(openssl rand -hex 32)
-
-# Run with PM2
-sudo npm install -g pm2
-pm2 start server.js --name pixai-proxy
-pm2 save
-pm2 startup
-```
-
-Open port 3000 in Oracle Cloud security list.
-
-## Use with SillyTavern Quick Image Gen
-
-- Provider: Reverse Proxy
-- URL: `http://YOUR_VM_IP:3000/v1/images/generations`
-- API Key: Your PixAI API key
+1. Go to https://pixai.art
+2. Sign in/create account
+3. Go to Settings → API
+4. Generate API key
