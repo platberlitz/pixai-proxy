@@ -199,7 +199,7 @@ async function generate() {
 </script></body></html>`));
 
 // API endpoint
-app.post('/v1/images/generations', async (req, res) => {
+const handleGenerate = async (req, res) => {
     const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
@@ -245,7 +245,9 @@ app.post('/v1/images/generations', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-});
+};
+app.post('/v1/images/generations', handleGenerate);
+app.post('/v1', handleGenerate);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`PixAI proxy running on http://localhost:${PORT}`));
