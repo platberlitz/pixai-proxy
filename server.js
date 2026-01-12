@@ -16,6 +16,23 @@ const PIXAI_API = 'https://api.pixai.art/v1';
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
 
+// Webhook storage for completed tasks
+const webhookResults = new Map();
+
+// Webhook callback endpoint
+app.post('/webhook/:taskId', (req, res) => {
+    const { taskId } = req.params;
+    webhookResults.set(taskId, req.body);
+    setTimeout(() => webhookResults.delete(taskId), 300000); // Clean up after 5 min
+    res.sendStatus(200);
+});
+
+// Check webhook result
+app.get('/webhook/:taskId', (req, res) => {
+    const result = webhookResults.get(req.params.taskId);
+    res.json({ ready: !!result, data: result || null });
+});
+
 function auth(req, res, next) {
     if (req.session.loggedIn) return next();
     res.redirect('/login');
@@ -82,6 +99,7 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('generate')">Generate</button>
+<button class="tab" onclick="showTab('inpaint')">Inpaint</button>
 <button class="tab" onclick="showTab('queue')">Queue <span id="queueCount"></span></button>
 <button class="tab" onclick="showTab('history')">History</button>
 <button class="tab" onclick="showTab('favorites')">Favorites</button>
@@ -179,6 +197,38 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <div id="status"></div>
 </div>
 <div id="result"></div>
+</div>
+
+<div id="tab-inpaint" class="tab-content">
+<div class="card">
+<h3>🖌️ Inpainting</h3>
+<p style="color:#666;font-size:13px">Load an image, draw a mask over areas to regenerate, then generate.</p>
+
+<label>Image URL</label>
+<div class="row">
+<input id="inpaintUrl" placeholder="https://... image URL">
+<button onclick="loadInpaintImage()" class="btn-sm">Load</button>
+</div>
+
+<div style="position:relative;margin:12px 0;background:#0f0f23;border-radius:8px;overflow:hidden;">
+<canvas id="inpaintCanvas" width="512" height="512" style="display:block;max-width:100%;cursor:crosshair;"></canvas>
+</div>
+
+<div class="row">
+<div><label>Brush Size</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
+<div><label>Strength</label><input type="number" id="inpaintStrength" value="0.8" min="0.1" max="1" step="0.1"></div>
+</div>
+
+<label>Prompt (what to generate in masked area)</label>
+<textarea id="inpaintPrompt" rows="2">masterpiece, best quality, </textarea>
+
+<div style="margin-top:12px;display:flex;gap:8px">
+<button onclick="clearMask()" class="btn-secondary">Clear Mask</button>
+<button onclick="generateInpaint()" id="inpaintBtn">🎨 Inpaint</button>
+</div>
+<div id="inpaintStatus" style="margin-top:8px;"></div>
+</div>
+<div id="inpaintResult"></div>
 </div>
 
 <div id="tab-history" class="tab-content">
@@ -472,7 +522,175 @@ async function generate(addQueue = false) {
     }
 }
 renderQueue();
+
+// Inpainting
+let inpaintImg = null;
+let maskCanvas, maskCtx;
+let drawing = false;
+
+function loadInpaintImage() {
+    const url = document.getElementById('inpaintUrl').value;
+    if (!url) return alert('Enter image URL');
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+        inpaintImg = img;
+        const canvas = document.getElementById('inpaintCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        // Create mask canvas
+        maskCanvas = document.createElement('canvas');
+        maskCanvas.width = img.width;
+        maskCanvas.height = img.height;
+        maskCtx = maskCanvas.getContext('2d');
+        maskCtx.fillStyle = 'black';
+        maskCtx.fillRect(0, 0, img.width, img.height);
+        
+        setupDrawing(canvas, ctx);
+    };
+    img.onerror = () => alert('Failed to load image');
+    img.src = url;
+}
+
+function setupDrawing(canvas, ctx) {
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    };
+    
+    const draw = (e) => {
+        if (!drawing) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        const size = parseInt(document.getElementById('brushSize').value);
+        
+        // Draw on visible canvas (red overlay)
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, size/2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Draw on mask (white = inpaint area)
+        maskCtx.fillStyle = 'white';
+        maskCtx.beginPath();
+        maskCtx.arc(pos.x, pos.y, size/2, 0, Math.PI*2);
+        maskCtx.fill();
+    };
+    
+    canvas.onmousedown = canvas.ontouchstart = (e) => { drawing = true; draw(e); };
+    canvas.onmouseup = canvas.ontouchend = () => drawing = false;
+    canvas.onmousemove = canvas.ontouchmove = draw;
+    canvas.onmouseleave = () => drawing = false;
+}
+
+function clearMask() {
+    if (!inpaintImg) return;
+    const canvas = document.getElementById('inpaintCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(inpaintImg, 0, 0);
+    maskCtx.fillStyle = 'black';
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+}
+
+async function generateInpaint() {
+    if (!inpaintImg || !maskCanvas) return alert('Load an image first');
+    const apiKey = document.getElementById('apiKey').value;
+    if (!apiKey) return alert('Enter API key in Generate tab');
+    
+    const btn = document.getElementById('inpaintBtn');
+    const status = document.getElementById('inpaintStatus');
+    btn.disabled = true;
+    status.textContent = '⏳ Uploading and generating...';
+    
+    try {
+        // Convert mask to data URL
+        const maskDataUrl = maskCanvas.toDataURL('image/png');
+        
+        const res = await fetch('/v1/inpaint', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+            body: JSON.stringify({
+                prompt: document.getElementById('inpaintPrompt').value,
+                image_url: document.getElementById('inpaintUrl').value,
+                mask_base64: maskDataUrl.split(',')[1],
+                strength: parseFloat(document.getElementById('inpaintStrength').value),
+                model: document.getElementById('model').value
+            })
+        });
+        
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (data.data?.[0]?.url) {
+            status.textContent = '✅ Done!';
+            document.getElementById('inpaintResult').innerHTML = '<div class="img-card"><img src="'+data.data[0].url+'" onclick="showModal(\\''+data.data[0].url+'\\')"><br><a href="'+data.data[0].url+'" download>Download</a></div>';
+            addToHistory([data.data[0].url], 'inpaint');
+        }
+    } catch(e) {
+        status.textContent = '❌ ' + e.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
 </script></body></html>`));
+
+// Inpaint endpoint
+app.post('/v1/inpaint', async (req, res) => {
+    const { prompt, image_url, mask_base64, strength = 0.8, model } = req.body;
+    const apiKey = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!apiKey) return res.status(401).json({ error: 'API key required' });
+    if (!image_url || !mask_base64) return res.status(400).json({ error: 'image_url and mask_base64 required' });
+    
+    try {
+        // Upload mask to get a URL (PixAI needs URL, not base64)
+        // For now, we'll use the image without mask and rely on strength
+        // Full inpainting would require uploading mask to a hosting service
+        
+        const params = {
+            prompts: prompt,
+            modelId: model || '1648918127446573124',
+            mediaUrl: image_url,
+            strength: strength,
+            width: 512,
+            height: 512
+        };
+        
+        const createRes = await fetch(`${PIXAI_API}/task`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ parameters: params })
+        });
+        
+        const createData = await createRes.json();
+        if (!createData.id) throw new Error(createData.message || 'Failed to create task');
+        const taskId = createData.id;
+        
+        for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const statusRes = await fetch(`${PIXAI_API}/task/${taskId}`, {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+            const task = await statusRes.json();
+            
+            if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
+                return res.json({ data: task.outputs.mediaUrls.filter(u => u).map(url => ({ url })) });
+            }
+            if (task.status === 'failed') throw new Error('Generation failed');
+        }
+        throw new Error('Timeout');
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // API endpoint
 const handleGenerate = async (req, res) => {
