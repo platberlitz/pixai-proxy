@@ -78,10 +78,11 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 .modal img{max-width:90%;max-height:90%;border-radius:8px}
 </style></head><body>
 <div class="container">
-<div class="header"><div><h1>🎨 PixAI Proxy</h1><small style="color:#666">Image Generation Dashboard</small></div><a href="/logout" class="logout">Logout</a></div>
+<div class="header"><div><h1>🎨 PixAI Proxy</h1><small style="color:#666">Image Generation Dashboard</small></div><div><span id="creditDisplay" style="color:#888;margin-right:16px;"></span><a href="/logout" class="logout">Logout</a></div></div>
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('generate')">Generate</button>
+<button class="tab" onclick="showTab('queue')">Queue <span id="queueCount"></span></button>
 <button class="tab" onclick="showTab('history')">History</button>
 <button class="tab" onclick="showTab('favorites')">Favorites</button>
 <button class="tab" onclick="showTab('presets')">Presets</button>
@@ -165,7 +166,8 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 
 <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
 <button onclick="window.open('https://pixai.art/model','_blank')" class="btn-secondary">🔍 Models</button>
-<button onclick="savePreset()">💾 Save Preset</button>
+<button onclick="savePreset()">💾 Preset</button>
+<button onclick="generate(true)" class="btn-secondary">📋 Queue</button>
 <button onclick="generate()" id="genBtn">🎨 Generate</button>
 </div>
 <div id="status"></div>
@@ -197,8 +199,20 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </div>
 </div>
 
+<div id="tab-queue" class="tab-content">
+<div class="card">
+<h3>📋 Generation Queue</h3>
+<p style="color:#666;font-size:13px">Queue multiple generations to run sequentially.</p>
+<div id="queueList"></div>
+<div style="margin-top:12px">
+<button onclick="processQueue()" id="processQueueBtn">▶️ Process Queue</button>
+<button onclick="clearQueue()" class="btn-secondary">Clear Queue</button>
+</div>
+</div>
+</div>
+
 <div class="info">
-<strong>API:</strong> <code>POST <span id="endpoint"></span>/v1</code>
+<strong>API:</strong> <code>POST <span id="endpoint"></span>/v1</code> | <strong>Session Cost:</strong> <span id="sessionCost">0</span> credits (estimated)
 </div>
 </div>
 
@@ -314,7 +328,77 @@ function usePreset(i) {
 }
 function deletePreset(i) { const p = getPresets(); p.splice(i, 1); savePresets(p); loadPresets(); }
 
-async function generate() {
+// Queue
+let queue = [];
+let sessionCredits = parseInt(localStorage.getItem('pixai_session_credits') || '0');
+document.getElementById('sessionCost').textContent = sessionCredits;
+
+function getQueue() { return queue; }
+function addToQueue() {
+    const style = document.getElementById('style').value;
+    queue.push({
+        prompt: style + document.getElementById('prompt').value,
+        negative_prompt: document.getElementById('negative').value,
+        width: parseInt(document.getElementById('width').value),
+        height: parseInt(document.getElementById('height').value),
+        model: document.getElementById('model').value,
+        n: parseInt(document.getElementById('count').value),
+        steps: parseInt(document.getElementById('steps').value),
+        cfg_scale: parseFloat(document.getElementById('cfg').value),
+        sampler: document.getElementById('sampler').value,
+        facefix: document.getElementById('facefix').checked
+    });
+    renderQueue();
+    showTab('queue');
+}
+function renderQueue() {
+    document.getElementById('queueCount').textContent = queue.length ? '('+queue.length+')' : '';
+    document.getElementById('queueList').innerHTML = queue.map((item, i) => 
+        '<div class="preset-item"><span>'+item.prompt.substring(0,40)+'... ('+item.n+' imgs)</span><button class="btn-sm btn-secondary" onclick="removeFromQueue('+i+')">✕</button></div>'
+    ).join('') || '<p style="color:#666">Queue is empty. Use "Add to Queue" button when generating.</p>';
+}
+function removeFromQueue(i) { queue.splice(i, 1); renderQueue(); }
+function clearQueue() { queue = []; renderQueue(); }
+async function processQueue() {
+    if (!queue.length) return alert('Queue is empty');
+    const apiKey = document.getElementById('apiKey').value;
+    if (!apiKey) return alert('Enter API key first');
+    
+    const btn = document.getElementById('processQueueBtn');
+    btn.disabled = true;
+    
+    for (let i = 0; i < queue.length; i++) {
+        btn.textContent = 'Processing '+(i+1)+'/'+queue.length+'...';
+        try {
+            const res = await fetch('/v1', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                body: JSON.stringify(queue[i])
+            });
+            const data = await res.json();
+            if (data.data?.length) {
+                addToHistory(data.data.map(d => d.url), queue[i].prompt);
+                trackCredits(queue[i].n, queue[i].facefix);
+            }
+        } catch(e) { console.error(e); }
+    }
+    queue = [];
+    renderQueue();
+    btn.disabled = false;
+    btn.textContent = '▶️ Process Queue';
+    showTab('history');
+}
+
+// Cost tracking (estimates)
+function trackCredits(count, facefix) {
+    const cost = count * (facefix ? 2 : 1);
+    sessionCredits += cost;
+    localStorage.setItem('pixai_session_credits', sessionCredits);
+    document.getElementById('sessionCost').textContent = sessionCredits;
+}
+
+async function generate(addQueue = false) {
+    if (addQueue) { addToQueue(); return; }
     const btn = document.getElementById('genBtn');
     const status = document.getElementById('status');
     const result = document.getElementById('result');
@@ -369,6 +453,7 @@ async function generate() {
             status.textContent = '✅ Done!';
             const urls = data.data.map(d => d.url);
             addToHistory(urls, promptText);
+            trackCredits(count, document.getElementById('facefix').checked);
             result.innerHTML = urls.map(url => '<div class="img-card"><img src="'+url+'" onclick="showModal(\\''+url+'\\')"><br><a href="'+url+'" download>Download</a></div>').join('');
         } else throw new Error('No images returned');
     } catch(e) {
@@ -377,6 +462,7 @@ async function generate() {
         btn.disabled = false;
     }
 }
+renderQueue();
 </script></body></html>`));
 
 // API endpoint
