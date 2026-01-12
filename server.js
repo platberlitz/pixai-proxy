@@ -6,7 +6,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({ secret: process.env.SESSION_SECRET || 'change-me-in-production', resave: false, saveUninitialized: false }));
 
-const PIXAI_API = 'https://api.pixai.art/graphql';
+const PIXAI_API = 'https://api.pixai.art/v1';
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
 
@@ -70,8 +70,8 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <label>Negative Prompt</label>
 <textarea id="negative">lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, deformed, ugly, duplicate, morbid, mutilated, out of frame, mutation, disfigured, poorly drawn hands, poorly drawn face, extra limbs, malformed limbs, fused fingers, too many fingers, long neck</textarea>
 
-<label>LoRAs (comma-separated: id:weight, e.g. 123456:0.8, 789012:0.6)</label>
-<input id="loras" placeholder="lora_id:weight, lora_id:weight">
+<label>LoRAs (id:weight, comma-separated)</label>
+<input id="loras" placeholder="1744880666293972790:0.7">
 
 <div class="row">
 <div><label>Resolution</label>
@@ -97,8 +97,8 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </div>
 
 <div class="row" id="customRes" style="display:none">
-<div><label>Width</label><input type="number" id="width" value="512" step="64" min="256" max="1024"></div>
-<div><label>Height</label><input type="number" id="height" value="768" step="64" min="256" max="1024"></div>
+<div><label>Width</label><input type="number" id="width" value="512" step="64" min="512" max="1280"></div>
+<div><label>Height</label><input type="number" id="height" value="768" step="64" min="512" max="1280"></div>
 </div>
 
 <div class="row">
@@ -153,9 +153,10 @@ async function generate() {
     status.style.display = 'block';
     result.innerHTML = '';
     
-    const loras = document.getElementById('loras').value.split(',').filter(l => l.trim()).map(l => {
+    const loraObj = {};
+    document.getElementById('loras').value.split(',').filter(l => l.trim()).forEach(l => {
         const [id, weight] = l.trim().split(':');
-        return { id: id.trim(), weight: parseFloat(weight) || 0.8 };
+        if (id) loraObj[id.trim()] = parseFloat(weight) || 0.7;
     });
     
     const body = {
@@ -166,7 +167,7 @@ async function generate() {
         model: document.getElementById('model').value,
         n: count
     };
-    if (loras.length) body.loras = loras;
+    if (Object.keys(loraObj).length) body.loras = loraObj;
     
     try {
         status.textContent = '⏳ Creating ' + count + ' image(s)...';
@@ -192,57 +193,46 @@ async function generate() {
 
 // API endpoint
 app.post('/v1/images/generations', async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 512, model, n = 1, loras } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
     
     try {
-        const input = {
+        const params = {
             prompts: prompt,
-            negativePrompts: negative_prompt || '',
-            width, height,
             modelId: model || '1648918127446573124',
-            samplingSteps: 25,
-            cfgScale: 7,
+            width: Math.max(512, Math.min(1280, width)),
+            height: Math.max(512, Math.min(1280, height)),
             batchSize: Math.min(n, 4)
         };
-        if (loras?.length) input.lpiLoraConfigs = loras.map(l => ({ loraId: l.id, weight: l.weight }));
+        if (negative_prompt) params.negativePrompts = negative_prompt;
+        if (loras && Object.keys(loras).length) params.lora = loras;
         
-        const createRes = await fetch(PIXAI_API, {
+        const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                query: `mutation($input: GenerateImageInput!) { generateImage(input: $input) { task { id } } }`,
-                variables: { input }
-            })
+            body: JSON.stringify({ parameters: params })
         });
         
         const createData = await createRes.json();
-        const taskId = createData.data?.generateImage?.task?.id;
-        if (!taskId) throw new Error(createData.errors?.[0]?.message || 'Failed to create task');
+        if (!createData.id) throw new Error(createData.message || 'Failed to create task');
+        const taskId = createData.id;
         
         for (let i = 0; i < 60; i++) {
             await new Promise(r => setTimeout(r, 2000));
             
-            const statusRes = await fetch(PIXAI_API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    query: `query($id: ID!) { task(id: $id) { status outputs { mediaId } } }`,
-                    variables: { id: taskId }
-                })
+            const statusRes = await fetch(`${PIXAI_API}/task/${taskId}`, {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
             });
+            const task = await statusRes.json();
             
-            const statusData = await statusRes.json();
-            const task = statusData.data?.task;
-            
-            if (task?.status === 'completed' && task.outputs?.length) {
+            if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
                 return res.json({
-                    data: task.outputs.map(o => ({ url: `https://imagedelivery.net/5ejkUOtsMH5sf63fw6q33Q/${o.mediaId}/public` }))
+                    data: task.outputs.mediaUrls.filter(u => u).map(url => ({ url }))
                 });
             }
-            if (task?.status === 'failed') throw new Error('Generation failed');
+            if (task.status === 'failed') throw new Error('Generation failed');
         }
         throw new Error('Timeout');
     } catch (e) {
