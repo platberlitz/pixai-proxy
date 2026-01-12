@@ -59,7 +59,6 @@ Visit `http://localhost:3000` to access the dashboard:
 
 ## Get PixAI API Key
 
-1. Go to https://pixai.art
-2. Sign in/create account
-3. Go to Settings → API
-4. Generate API key
+1. Go to https://pixai.art/en/profile/edit/api
+2. Sign in if needed
+3. Generate API key
