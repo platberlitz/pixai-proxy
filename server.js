@@ -109,6 +109,28 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 
 <div class="row">
 <div><label>Model ID</label><input id="model" value="1648918127446573124" placeholder="PixAI model ID"></div>
+<div><label>Sampler</label>
+<select id="sampler">
+<option value="Euler a">Euler a</option>
+<option value="Euler">Euler</option>
+<option value="DPM++ 2M Karras">DPM++ 2M Karras</option>
+<option value="DPM++ SDE Karras">DPM++ SDE Karras</option>
+<option value="DPM++ 2M SDE Karras">DPM++ 2M SDE Karras</option>
+<option value="DDIM">DDIM</option>
+<option value="LMS">LMS</option>
+<option value="Heun">Heun</option>
+<option value="DPM2 Karras">DPM2 Karras</option>
+<option value="Restart">Restart</option>
+</select></div>
+</div>
+
+<div class="row">
+<div><label>Steps</label><input type="number" id="steps" value="25" min="8" max="50"></div>
+<div><label>CFG Scale</label><input type="number" id="cfg" value="6" min="1" max="15" step="0.5"></div>
+<div><label>Seed (-1=random)</label><input type="number" id="seed" value="-1"></div>
+</div>
+
+<div class="row">
 <div><label>Style</label>
 <select id="style">
 <option value="">None</option>
@@ -118,9 +140,6 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <option value="oil painting, ">Oil Painting</option>
 <option value="watercolor, ">Watercolor</option>
 </select></div>
-</div>
-
-<div class="row">
 <div><label>Upscale</label>
 <select id="upscale">
 <option value="1">None</option>
@@ -153,7 +172,7 @@ Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2
 </div>
 
 <script>
-const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','upscaleDenoise'];
+const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','upscaleDenoise','sampler','steps','cfg','seed'];
 const checkboxes = ['facefix','tile'];
 function save() { 
     fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value));
@@ -201,6 +220,7 @@ async function generate() {
     });
     
     const upscale = parseFloat(document.getElementById('upscale').value);
+    const seed = parseInt(document.getElementById('seed').value);
     const body = {
         prompt: style + document.getElementById('prompt').value,
         negative_prompt: document.getElementById('negative').value,
@@ -208,6 +228,10 @@ async function generate() {
         height: parseInt(document.getElementById('height').value),
         model: document.getElementById('model').value,
         n: count,
+        steps: parseInt(document.getElementById('steps').value),
+        cfg_scale: parseFloat(document.getElementById('cfg').value),
+        sampler: document.getElementById('sampler').value,
+        seed: seed >= 0 ? seed : undefined,
         facefix: document.getElementById('facefix').checked,
         upscale: upscale > 1 ? upscale : undefined,
         upscaleDenoise: upscale > 1 ? parseFloat(document.getElementById('upscaleDenoise').value) : undefined,
@@ -239,7 +263,7 @@ async function generate() {
 
 // API endpoint
 const handleGenerate = async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile, steps, cfg_scale, sampler, seed } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
@@ -253,6 +277,10 @@ const handleGenerate = async (req, res) => {
             batchSize: Math.min(n, 4)
         };
         if (negative_prompt) params.negativePrompts = negative_prompt;
+        if (steps) params.samplingSteps = steps;
+        if (cfg_scale) params.cfgScale = cfg_scale;
+        if (sampler) params.samplingMethod = sampler;
+        if (seed !== undefined && seed >= 0) params.seed = seed;
         
         // Handle loras as array [{id, weight}] or object {id: weight}
         if (loras) {
