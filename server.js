@@ -8,7 +8,7 @@ app.use((req, res, next) => {
     if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
 });
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({ secret: process.env.SESSION_SECRET || 'change-me-in-production', resave: false, saveUninitialized: false }));
 
@@ -44,33 +44,55 @@ app.get('/', auth, (req, res) => res.send(`
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{box-sizing:border-box}body{font-family:system-ui;background:#1a1a2e;color:#eee;margin:0;padding:20px}
-.container{max-width:800px;margin:0 auto}
-h1{color:#e94560;margin-bottom:5px}
+.container{max-width:900px;margin:0 auto}
+h1{color:#e94560;margin-bottom:5px}h3{color:#e94560;margin:0 0 10px}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
 .logout{color:#888;text-decoration:none;font-size:14px}.logout:hover{color:#e94560}
 .card{background:#16213e;padding:20px;border-radius:12px;margin-bottom:20px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{padding:8px 16px;background:#0f0f23;border:none;border-radius:6px;color:#888;cursor:pointer}
+.tab.active{background:#e94560;color:#fff}
+.tab-content{display:none}.tab-content.active{display:block}
 label{display:block;margin:12px 0 4px;font-size:14px;color:#aaa}
 input,textarea,select{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#0f0f23;color:#fff;font-size:14px}
 textarea{resize:vertical;min-height:80px}
-.row{display:flex;gap:12px}.row>*{flex:1}
-button{padding:12px 24px;background:#e94560;border:none;border-radius:6px;color:#fff;font-size:16px;cursor:pointer;margin-top:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
+button{padding:10px 20px;background:#e94560;border:none;border-radius:6px;color:#fff;font-size:14px;cursor:pointer}
 button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-secondary{background:#333}
 #result{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
-#result img{max-width:100%;border-radius:8px}
 #status{padding:12px;background:#0f0f23;border-radius:6px;margin-top:12px;display:none}
+.img-card{background:#0f0f23;padding:8px;border-radius:8px;text-align:center;max-width:200px}
+.img-card img{max-width:100%;border-radius:4px;cursor:pointer}
+.img-card a{color:#e94560;font-size:12px}
+.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:400px;overflow-y:auto}
+.history-item{background:#0f0f23;padding:6px;border-radius:6px;cursor:pointer;position:relative}
+.history-item img{width:100%;border-radius:4px}
+.history-item:hover{outline:2px solid #e94560}
+.preset-item,.fav-item{background:#0f0f23;padding:10px;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.preset-item span,.fav-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .info{background:#0f0f23;padding:12px;border-radius:6px;font-size:13px;color:#888;margin-top:12px}
 .info code{background:#1a1a2e;padding:2px 6px;border-radius:4px;color:#e94560}
-.img-card{background:#0f0f23;padding:8px;border-radius:8px;text-align:center}
-.img-card a{color:#e94560;font-size:12px}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center}
+.modal img{max-width:90%;max-height:90%;border-radius:8px}
 </style></head><body>
 <div class="container">
 <div class="header"><div><h1>🎨 PixAI Proxy</h1><small style="color:#666">Image Generation Dashboard</small></div><a href="/logout" class="logout">Logout</a></div>
 
+<div class="tabs">
+<button class="tab active" onclick="showTab('generate')">Generate</button>
+<button class="tab" onclick="showTab('history')">History</button>
+<button class="tab" onclick="showTab('favorites')">Favorites</button>
+<button class="tab" onclick="showTab('presets')">Presets</button>
+</div>
+
+<div id="tab-generate" class="tab-content active">
 <div class="card">
 <label>PixAI API Key</label>
 <input type="password" id="apiKey" placeholder="Get from pixai.art/en/profile/edit/api">
 
-<label>Prompt</label>
+<label>Prompt <button class="btn-sm btn-secondary" onclick="saveFavorite()" style="float:right">⭐ Save</button></label>
 <textarea id="prompt" placeholder="describe your image">masterpiece, best quality, highly detailed, sharp focus, </textarea>
 
 <label>Negative Prompt</label>
@@ -82,23 +104,19 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <div class="row">
 <div><label>Resolution</label>
 <select id="resolution" onchange="applyRes()">
-<option value="512x512">512×512 (Square)</option>
-<option value="512x768" selected>512×768 (Portrait)</option>
-<option value="768x512">768×512 (Landscape)</option>
-<option value="640x640">640×640 (Square HD)</option>
-<option value="640x960">640×960 (Portrait HD)</option>
-<option value="960x640">960×640 (Landscape HD)</option>
-<option value="768x768">768×768 (Square XL)</option>
-<option value="768x1024">768×1024 (Portrait XL)</option>
-<option value="1024x768">1024×768 (Landscape XL)</option>
-<option value="1024x1024">1024×1024 (Square Max)</option>
+<option value="512x512">512×512</option>
+<option value="512x768" selected>512×768</option>
+<option value="768x512">768×512</option>
+<option value="768x1024">768×1024</option>
+<option value="1024x768">1024×768</option>
+<option value="1024x1024">1024×1024</option>
 <option value="custom">Custom</option>
 </select></div>
 <div><label>Count</label>
 <select id="count">
-<option value="1">1 image</option>
-<option value="2">2 images</option>
-<option value="4" selected>4 images</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="4" selected>4</option>
 </select></div>
 </div>
 
@@ -108,26 +126,21 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </div>
 
 <div class="row">
-<div><label>Model ID</label><input id="model" value="1648918127446573124" placeholder="PixAI model ID"></div>
+<div><label>Model ID</label><input id="model" value="1648918127446573124"></div>
 <div><label>Sampler</label>
 <select id="sampler">
 <option value="Euler a">Euler a</option>
 <option value="Euler">Euler</option>
 <option value="DPM++ 2M Karras">DPM++ 2M Karras</option>
 <option value="DPM++ SDE Karras">DPM++ SDE Karras</option>
-<option value="DPM++ 2M SDE Karras">DPM++ 2M SDE Karras</option>
 <option value="DDIM">DDIM</option>
-<option value="LMS">LMS</option>
-<option value="Heun">Heun</option>
-<option value="DPM2 Karras">DPM2 Karras</option>
-<option value="Restart">Restart</option>
 </select></div>
 </div>
 
 <div class="row">
 <div><label>Steps</label><input type="number" id="steps" value="25" min="8" max="50"></div>
-<div><label>CFG Scale</label><input type="number" id="cfg" value="6" min="1" max="15" step="0.5"></div>
-<div><label>Seed (-1=random)</label><input type="number" id="seed" value="-1"></div>
+<div><label>CFG</label><input type="number" id="cfg" value="6" min="1" max="15" step="0.5"></div>
+<div><label>Seed</label><input type="number" id="seed" value="-1"></div>
 </div>
 
 <div class="row">
@@ -136,9 +149,6 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <option value="">None</option>
 <option value="anime style, ">Anime</option>
 <option value="realistic, photorealistic, ">Realistic</option>
-<option value="cartoon style, ">Cartoon</option>
-<option value="oil painting, ">Oil Painting</option>
-<option value="watercolor, ">Watercolor</option>
 </select></div>
 <div><label>Upscale</label>
 <select id="upscale">
@@ -146,47 +156,82 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <option value="1.5">1.5x</option>
 <option value="2">2x</option>
 </select></div>
-<div><label>Upscale Denoise</label>
-<input type="number" id="upscaleDenoise" value="0.6" step="0.1" min="0.1" max="0.99"></div>
 </div>
 
-<div class="row" style="margin-top:8px">
-<label class="checkbox_label"><input type="checkbox" id="facefix"> Face Fix (ADetailer)</label>
-<label class="checkbox_label"><input type="checkbox" id="tile"> ControlNet Tile</label>
+<div class="row" style="margin-top:12px">
+<label><input type="checkbox" id="facefix"> Face Fix</label>
+<label><input type="checkbox" id="tile"> ControlNet Tile</label>
 </div>
 
-<div style="margin-top:12px;padding-top:12px;border-top:1px solid #333">
-<button onclick="window.open('https://pixai.art/model','_blank')" style="background:#333;margin-right:8px">🔍 Browse Models</button>
+<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+<button onclick="window.open('https://pixai.art/model','_blank')" class="btn-secondary">🔍 Models</button>
+<button onclick="savePreset()">💾 Save Preset</button>
 <button onclick="generate()" id="genBtn">🎨 Generate</button>
 </div>
 <div id="status"></div>
 </div>
-
 <div id="result"></div>
+</div>
+
+<div id="tab-history" class="tab-content">
+<div class="card">
+<h3>📜 Generation History</h3>
+<p style="color:#666;font-size:13px">Click an image to view full size. History is stored in your browser.</p>
+<div id="historyGrid" class="history-grid"></div>
+<button onclick="clearHistory()" class="btn-secondary btn-sm" style="margin-top:12px">Clear History</button>
+</div>
+</div>
+
+<div id="tab-favorites" class="tab-content">
+<div class="card">
+<h3>⭐ Favorite Prompts</h3>
+<div id="favoritesList"></div>
+</div>
+</div>
+
+<div id="tab-presets" class="tab-content">
+<div class="card">
+<h3>💾 Model Presets</h3>
+<p style="color:#666;font-size:13px">Save model + LoRA + settings combinations for quick access.</p>
+<div id="presetsList"></div>
+</div>
+</div>
 
 <div class="info">
-<strong>API Endpoint:</strong> <code>POST <span id="endpoint"></span>/v1/images/generations</code><br><br>
-Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2"></span>/v1/images/generations</code>
+<strong>API:</strong> <code>POST <span id="endpoint"></span>/v1</code>
 </div>
-<script>document.getElementById('endpoint').textContent=location.origin;document.getElementById('endpoint2').textContent=location.origin;</script>
+</div>
+
+<div id="modal" class="modal" onclick="this.style.display='none'">
+<img id="modalImg" src="">
 </div>
 
 <script>
-const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','upscaleDenoise','sampler','steps','cfg','seed'];
+document.getElementById('endpoint').textContent=location.origin;
+
+const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','sampler','steps','cfg','seed'];
 const checkboxes = ['facefix','tile'];
+
 function save() { 
-    fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value));
-    checkboxes.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).checked));
+    fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f)?.value || ''));
+    checkboxes.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f)?.checked || false));
 }
 function load() { 
-    fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v) document.getElementById(f).value = v; });
-    checkboxes.forEach(f => document.getElementById(f).checked = localStorage.getItem('pixai_'+f) === 'true');
-    applyRes();
+    fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v && document.getElementById(f)) document.getElementById(f).value = v; });
+    checkboxes.forEach(f => { if(document.getElementById(f)) document.getElementById(f).checked = localStorage.getItem('pixai_'+f) === 'true'; });
+    applyRes(); loadHistory(); loadFavorites(); loadPresets();
 }
 window.onload = load;
 fields.forEach(f => document.getElementById(f)?.addEventListener('change', save));
 fields.forEach(f => document.getElementById(f)?.addEventListener('input', save));
 checkboxes.forEach(f => document.getElementById(f)?.addEventListener('change', save));
+
+function showTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('.tab[onclick*="'+name+'"]').classList.add('active');
+    document.getElementById('tab-'+name).classList.add('active');
+}
 
 function applyRes() {
     const v = document.getElementById('resolution').value;
@@ -197,6 +242,77 @@ function applyRes() {
         document.getElementById('height').value = h;
     }
 }
+
+// History
+function getHistory() { return JSON.parse(localStorage.getItem('pixai_history') || '[]'); }
+function saveHistory(h) { localStorage.setItem('pixai_history', JSON.stringify(h.slice(0, 50))); }
+function addToHistory(urls, prompt) {
+    const h = getHistory();
+    urls.forEach(url => h.unshift({ url, prompt, date: Date.now() }));
+    saveHistory(h); loadHistory();
+}
+function loadHistory() {
+    const h = getHistory();
+    document.getElementById('historyGrid').innerHTML = h.map((item, i) => 
+        '<div class="history-item" onclick="showModal(\\''+item.url+'\\')"><img src="'+item.url+'" loading="lazy"></div>'
+    ).join('') || '<p style="color:#666">No history yet</p>';
+}
+function clearHistory() { if(confirm('Clear all history?')) { localStorage.removeItem('pixai_history'); loadHistory(); } }
+function showModal(url) { document.getElementById('modalImg').src = url; document.getElementById('modal').style.display = 'flex'; }
+
+// Favorites
+function getFavorites() { return JSON.parse(localStorage.getItem('pixai_favorites') || '[]'); }
+function saveFavorites(f) { localStorage.setItem('pixai_favorites', JSON.stringify(f)); }
+function saveFavorite() {
+    const prompt = document.getElementById('prompt').value;
+    if (!prompt.trim()) return alert('Enter a prompt first');
+    const f = getFavorites();
+    f.unshift({ prompt, date: Date.now() });
+    saveFavorites(f); loadFavorites();
+    alert('Prompt saved to favorites!');
+}
+function loadFavorites() {
+    const f = getFavorites();
+    document.getElementById('favoritesList').innerHTML = f.map((item, i) => 
+        '<div class="fav-item"><span>'+item.prompt.substring(0,60)+'...</span><button class="btn-sm" onclick="useFavorite('+i+')">Use</button><button class="btn-sm btn-secondary" onclick="deleteFavorite('+i+')">✕</button></div>'
+    ).join('') || '<p style="color:#666">No favorites yet. Click ⭐ Save next to the prompt field.</p>';
+}
+function useFavorite(i) { document.getElementById('prompt').value = getFavorites()[i].prompt; showTab('generate'); }
+function deleteFavorite(i) { const f = getFavorites(); f.splice(i, 1); saveFavorites(f); loadFavorites(); }
+
+// Presets
+function getPresets() { return JSON.parse(localStorage.getItem('pixai_presets') || '[]'); }
+function savePresets(p) { localStorage.setItem('pixai_presets', JSON.stringify(p)); }
+function savePreset() {
+    const name = prompt('Preset name:');
+    if (!name) return;
+    const p = getPresets();
+    p.unshift({
+        name, model: document.getElementById('model').value, loras: document.getElementById('loras').value,
+        sampler: document.getElementById('sampler').value, steps: document.getElementById('steps').value,
+        cfg: document.getElementById('cfg').value, resolution: document.getElementById('resolution').value,
+        facefix: document.getElementById('facefix').checked, date: Date.now()
+    });
+    savePresets(p); loadPresets();
+}
+function loadPresets() {
+    const p = getPresets();
+    document.getElementById('presetsList').innerHTML = p.map((item, i) => 
+        '<div class="preset-item"><span>'+item.name+' ('+item.model.substring(0,10)+'...)</span><button class="btn-sm" onclick="usePreset('+i+')">Load</button><button class="btn-sm btn-secondary" onclick="deletePreset('+i+')">✕</button></div>'
+    ).join('') || '<p style="color:#666">No presets yet. Click 💾 Save Preset to create one.</p>';
+}
+function usePreset(i) {
+    const p = getPresets()[i];
+    document.getElementById('model').value = p.model;
+    document.getElementById('loras').value = p.loras || '';
+    document.getElementById('sampler').value = p.sampler;
+    document.getElementById('steps').value = p.steps;
+    document.getElementById('cfg').value = p.cfg;
+    document.getElementById('resolution').value = p.resolution;
+    document.getElementById('facefix').checked = p.facefix;
+    applyRes(); save(); showTab('generate');
+}
+function deletePreset(i) { const p = getPresets(); p.splice(i, 1); savePresets(p); loadPresets(); }
 
 async function generate() {
     const btn = document.getElementById('genBtn');
@@ -221,8 +337,9 @@ async function generate() {
     
     const upscale = parseFloat(document.getElementById('upscale').value);
     const seed = parseInt(document.getElementById('seed').value);
+    const promptText = style + document.getElementById('prompt').value;
     const body = {
-        prompt: style + document.getElementById('prompt').value,
+        prompt: promptText,
         negative_prompt: document.getElementById('negative').value,
         width: parseInt(document.getElementById('width').value),
         height: parseInt(document.getElementById('height').value),
@@ -234,14 +351,13 @@ async function generate() {
         seed: seed >= 0 ? seed : undefined,
         facefix: document.getElementById('facefix').checked,
         upscale: upscale > 1 ? upscale : undefined,
-        upscaleDenoise: upscale > 1 ? parseFloat(document.getElementById('upscaleDenoise').value) : undefined,
         tile: document.getElementById('tile').checked || undefined
     };
     if (Object.keys(loraObj).length) body.loras = loraObj;
     
     try {
-        status.textContent = '⏳ Creating ' + count + ' image(s)...' + (upscale > 1 ? ' (with upscale)' : '');
-        const res = await fetch('/v1/images/generations', {
+        status.textContent = '⏳ Generating ' + count + ' image(s)...';
+        const res = await fetch('/v1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
             body: JSON.stringify(body)
@@ -251,10 +367,12 @@ async function generate() {
         if (data.error) throw new Error(data.error);
         if (data.data?.length) {
             status.textContent = '✅ Done!';
-            result.innerHTML = data.data.map(d => '<div class="img-card"><img src="' + d.url + '"><br><a href="' + d.url + '" download>Download</a></div>').join('');
+            const urls = data.data.map(d => d.url);
+            addToHistory(urls, promptText);
+            result.innerHTML = urls.map(url => '<div class="img-card"><img src="'+url+'" onclick="showModal(\\''+url+'\\')"><br><a href="'+url+'" download>Download</a></div>').join('');
         } else throw new Error('No images returned');
     } catch(e) {
-        status.textContent = '❌ Error: ' + e.message;
+        status.textContent = '❌ ' + e.message;
     } finally {
         btn.disabled = false;
     }
@@ -282,7 +400,6 @@ const handleGenerate = async (req, res) => {
         if (sampler) params.samplingMethod = sampler;
         if (seed !== undefined && seed >= 0) params.seed = seed;
         
-        // Handle loras as array [{id, weight}] or object {id: weight}
         if (loras) {
             if (Array.isArray(loras)) {
                 params.lora = {};
@@ -308,7 +425,7 @@ const handleGenerate = async (req, res) => {
         if (!createData.id) throw new Error(createData.message || 'Failed to create task');
         const taskId = createData.id;
         
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 90; i++) {
             await new Promise(r => setTimeout(r, 2000));
             
             const statusRes = await fetch(`${PIXAI_API}/task/${taskId}`, {
