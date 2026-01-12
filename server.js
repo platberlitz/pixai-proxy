@@ -120,11 +120,26 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 </select></div>
 </div>
 
-<label class="checkbox_label" style="margin-top:12px">
-<input type="checkbox" id="facefix"> Enable Face Fix (ADetailer) - uses extra credits
-</label>
+<div class="row">
+<div><label>Upscale</label>
+<select id="upscale">
+<option value="1">None</option>
+<option value="1.5">1.5x</option>
+<option value="2">2x</option>
+</select></div>
+<div><label>Upscale Denoise</label>
+<input type="number" id="upscaleDenoise" value="0.6" step="0.1" min="0.1" max="0.99"></div>
+</div>
 
-<button onclick="generate()" id="genBtn">🎨 Generate Images</button>
+<div class="row" style="margin-top:8px">
+<label class="checkbox_label"><input type="checkbox" id="facefix"> Face Fix (ADetailer)</label>
+<label class="checkbox_label"><input type="checkbox" id="tile"> ControlNet Tile</label>
+</div>
+
+<div style="margin-top:12px;padding-top:12px;border-top:1px solid #333">
+<button onclick="window.open('https://pixai.art/model','_blank')" style="background:#333;margin-right:8px">🔍 Browse Models</button>
+<button onclick="generate()" id="genBtn">🎨 Generate</button>
+</div>
 <div id="status"></div>
 </div>
 
@@ -138,20 +153,21 @@ Use with SillyTavern Quick Image Gen: set Proxy URL to <code><span id="endpoint2
 </div>
 
 <script>
-const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style'];
+const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','upscaleDenoise'];
+const checkboxes = ['facefix','tile'];
 function save() { 
     fields.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).value));
-    localStorage.setItem('pixai_facefix', document.getElementById('facefix').checked);
+    checkboxes.forEach(f => localStorage.setItem('pixai_'+f, document.getElementById(f).checked));
 }
 function load() { 
     fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v) document.getElementById(f).value = v; });
-    document.getElementById('facefix').checked = localStorage.getItem('pixai_facefix') === 'true';
+    checkboxes.forEach(f => document.getElementById(f).checked = localStorage.getItem('pixai_'+f) === 'true');
     applyRes();
 }
 window.onload = load;
 fields.forEach(f => document.getElementById(f)?.addEventListener('change', save));
 fields.forEach(f => document.getElementById(f)?.addEventListener('input', save));
-document.getElementById('facefix')?.addEventListener('change', save);
+checkboxes.forEach(f => document.getElementById(f)?.addEventListener('change', save));
 
 function applyRes() {
     const v = document.getElementById('resolution').value;
@@ -184,6 +200,7 @@ async function generate() {
         if (id) loraObj[id.trim()] = parseFloat(weight) || 0.7;
     });
     
+    const upscale = parseFloat(document.getElementById('upscale').value);
     const body = {
         prompt: style + document.getElementById('prompt').value,
         negative_prompt: document.getElementById('negative').value,
@@ -191,12 +208,15 @@ async function generate() {
         height: parseInt(document.getElementById('height').value),
         model: document.getElementById('model').value,
         n: count,
-        facefix: document.getElementById('facefix').checked
+        facefix: document.getElementById('facefix').checked,
+        upscale: upscale > 1 ? upscale : undefined,
+        upscaleDenoise: upscale > 1 ? parseFloat(document.getElementById('upscaleDenoise').value) : undefined,
+        tile: document.getElementById('tile').checked || undefined
     };
     if (Object.keys(loraObj).length) body.loras = loraObj;
     
     try {
-        status.textContent = '⏳ Creating ' + count + ' image(s)...';
+        status.textContent = '⏳ Creating ' + count + ' image(s)...' + (upscale > 1 ? ' (with upscale)' : '');
         const res = await fetch('/v1/images/generations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
@@ -219,7 +239,7 @@ async function generate() {
 
 // API endpoint
 const handleGenerate = async (req, res) => {
-    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix } = req.body;
+    const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
     
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
@@ -244,6 +264,11 @@ const handleGenerate = async (req, res) => {
             }
         }
         if (facefix) params.enableADetailer = true;
+        if (upscale && upscale > 1) {
+            params.upscale = upscale;
+            if (upscaleDenoise) params.upscaleDenoisingStrength = upscaleDenoise;
+        }
+        if (tile) params.enableTile = true;
         
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST',
