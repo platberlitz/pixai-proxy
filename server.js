@@ -861,6 +861,13 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         let { prompt, aspect_ratio, preset, n = 1, width, height, style } = req.body;
         if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
         
+        // Limit prompt length to prevent timeouts (Naistera seems to struggle with very long prompts)
+        const maxPromptLength = 500;
+        if (prompt.length > maxPromptLength) {
+            prompt = prompt.substring(0, maxPromptLength).trim();
+            console.log('Naistera prompt truncated to', maxPromptLength, 'chars');
+        }
+        
         // Force anime style unless explicitly requesting realistic/photo
         const lowerPrompt = prompt.toLowerCase();
         if (!lowerPrompt.includes('realistic') && !lowerPrompt.includes('photo') && !lowerPrompt.includes('3d render')) {
