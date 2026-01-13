@@ -1,5 +1,12 @@
 # PixAI Reverse Proxy
 
+## TL;DR
+OpenAI-compatible proxy for PixAI and Naistera APIs with web dashboard. Handles task polling, batch generation, LoRAs, upscaling. Auto-adds anime style to Naistera. Login protected.
+
+**Quick start:** `npm install → npm start → http://localhost:3000 → admin/admin`
+
+---
+
 Proxy server translating OpenAI-compatible requests to PixAI and Naistera APIs. Includes full-featured web dashboard.
 
 ## Why a Proxy?
@@ -28,6 +35,9 @@ PixAI uses a task-based API (create task → poll → get results). Naistera ret
 - 🌟 **Simple API** - Just prompt and go
 - 📐 **Aspect Ratios** - 1:1, 16:9, 9:16, 3:2, 2:3
 - 🎨 **Presets** - Digital Art, Realism
+- 🎲 **Variety Generation** - Multiple images with prompt variations
+- ✂️ **Auto-truncation** - Prompts limited to 500 chars to prevent timeouts
+- 🎌 **Auto-anime** - Automatically adds anime style unless realistic requested
 
 ### Organization
 - 📜 **Image History** - Last 50 images
