@@ -882,22 +882,22 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         if (ar) params.append('aspect_ratio', ar);
         if (preset) params.append('preset', preset);
         
-        const results = [];
-        for (let i = 0; i < Math.min(n || 1, 4); i++) {
-            const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
-            console.log('Naistera request:', url.replace(apiKey, '***'));
+        const count = Math.min(n || 1, 4);
+        const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
+        console.log('Naistera request:', url.replace(apiKey, '***'), 'count:', count);
+        
+        // Generate in parallel
+        const promises = Array(count).fill().map(async () => {
             const imgRes = await fetch(url);
-            
             if (!imgRes.ok) {
                 const text = await imgRes.text();
-                console.error('Naistera error:', imgRes.status, text);
                 throw new Error(`Naistera error: ${imgRes.status} - ${text}`);
             }
-            
             const buffer = await imgRes.arrayBuffer();
-            const base64 = Buffer.from(buffer).toString('base64');
-            results.push({ b64_json: base64 });
-        }
+            return { b64_json: Buffer.from(buffer).toString('base64') };
+        });
+        
+        const results = await Promise.all(promises);
         
         res.json({ data: results });
     } catch (e) {
