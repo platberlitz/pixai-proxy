@@ -803,5 +803,93 @@ const handleGenerate = async (req, res) => {
 app.post('/v1/images/generations', handleGenerate);
 app.post('/v1', handleGenerate);
 
+// Naistera proxy - OpenAI chat completions compatible
+const NAISTERA_API = 'https://naistera.org/prompt';
+
+app.post('/naistera/v1/chat/completions', async (req, res) => {
+    try {
+        const apiKey = req.headers.authorization?.replace('Bearer ', '');
+        if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
+        
+        const { messages, model } = req.body;
+        const lastMsg = messages?.filter(m => m.role === 'user').pop();
+        if (!lastMsg) return res.status(400).json({ error: 'No user message' });
+        
+        // Extract prompt from message content
+        let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : 
+            lastMsg.content?.find(c => c.type === 'text')?.text || '';
+        
+        // Parse aspect ratio and preset from prompt or model name
+        let aspect_ratio = '1:1', preset = '';
+        const aspectMatch = prompt.match(/\[(\d+:\d+)\]/);
+        if (aspectMatch) { aspect_ratio = aspectMatch[1]; prompt = prompt.replace(aspectMatch[0], '').trim(); }
+        const presetMatch = prompt.match(/\[(digital|realism)\]/i);
+        if (presetMatch) { preset = presetMatch[1].toLowerCase(); prompt = prompt.replace(presetMatch[0], '').trim(); }
+        
+        // Build URL
+        const params = new URLSearchParams({ token: apiKey });
+        if (aspect_ratio) params.append('aspect_ratio', aspect_ratio);
+        if (preset) params.append('preset', preset);
+        
+        const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
+        const imgRes = await fetch(url);
+        
+        if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
+        
+        const buffer = await imgRes.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+        const contentType = imgRes.headers.get('content-type') || 'image/png';
+        const dataUrl = `data:${contentType};base64,${base64}`;
+        
+        // Return OpenAI-compatible response
+        res.json({
+            id: 'naistera-' + Date.now(),
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: model || 'naistera',
+            choices: [{
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content: `![Generated Image](${dataUrl})`
+                },
+                finish_reason: 'stop'
+            }]
+        });
+    } catch (e) {
+        res.status(500).json({ error: { message: e.message } });
+    }
+});
+
+// Naistera images/generations endpoint
+app.post('/naistera/v1/images/generations', async (req, res) => {
+    try {
+        const apiKey = req.headers.authorization?.replace('Bearer ', '');
+        if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
+        
+        const { prompt, aspect_ratio, preset, n = 1 } = req.body;
+        if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+        
+        const params = new URLSearchParams({ token: apiKey });
+        if (aspect_ratio) params.append('aspect_ratio', aspect_ratio);
+        if (preset) params.append('preset', preset);
+        
+        const results = [];
+        for (let i = 0; i < Math.min(n, 4); i++) {
+            const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
+            const imgRes = await fetch(url);
+            if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
+            
+            const buffer = await imgRes.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            results.push({ b64_json: base64 });
+        }
+        
+        res.json({ data: results });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`PixAI proxy running on http://localhost:${PORT}`));
