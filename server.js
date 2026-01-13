@@ -942,20 +942,37 @@ app.post('/naistera/v1/chat/completions', async (req, res) => {
 app.post('/naistera/v1/images/generations', async (req, res) => {
     try {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
-        if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
+        if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
         
-        const { prompt, aspect_ratio, preset, n = 1 } = req.body;
-        if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+        const { prompt, aspect_ratio, preset, n = 1, width, height } = req.body;
+        if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
+        
+        // Determine aspect ratio from width/height if not provided
+        let ar = aspect_ratio;
+        if (!ar && width && height) {
+            const ratio = width / height;
+            if (ratio > 1.5) ar = '16:9';
+            else if (ratio < 0.67) ar = '9:16';
+            else if (ratio > 1.2) ar = '3:2';
+            else if (ratio < 0.83) ar = '2:3';
+            else ar = '1:1';
+        }
         
         const params = new URLSearchParams({ token: apiKey });
-        if (aspect_ratio) params.append('aspect_ratio', aspect_ratio);
+        if (ar) params.append('aspect_ratio', ar);
         if (preset) params.append('preset', preset);
         
         const results = [];
-        for (let i = 0; i < Math.min(n, 4); i++) {
+        for (let i = 0; i < Math.min(n || 1, 4); i++) {
             const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
+            console.log('Naistera request:', url.replace(apiKey, '***'));
             const imgRes = await fetch(url);
-            if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
+            
+            if (!imgRes.ok) {
+                const text = await imgRes.text();
+                console.error('Naistera error:', imgRes.status, text);
+                throw new Error(`Naistera error: ${imgRes.status} - ${text}`);
+            }
             
             const buffer = await imgRes.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
@@ -964,7 +981,8 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         
         res.json({ data: results });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('Naistera proxy error:', e.message);
+        res.status(500).json({ error: { message: e.message } });
     }
 });
 
