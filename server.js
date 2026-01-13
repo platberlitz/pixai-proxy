@@ -99,6 +99,7 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('generate')">Generate</button>
+<button class="tab" onclick="showTab('naistera')">Naistera</button>
 <button class="tab" onclick="showTab('inpaint')">Inpaint</button>
 <button class="tab" onclick="showTab('queue')">Queue <span id="queueCount"></span></button>
 <button class="tab" onclick="showTab('history')">History</button>
@@ -238,6 +239,46 @@ button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
 <div id="status"></div>
 </div>
 <div id="result"></div>
+</div>
+
+<div id="tab-naistera" class="tab-content">
+<div class="card">
+<h3>🌟 Naistera</h3>
+<p style="color:#666;font-size:13px">Simple image generation via Naistera API</p>
+
+<label>Naistera Token</label>
+<input type="password" id="naisteraToken" placeholder="Get from @naistera_blocks_bot on Telegram">
+
+<label>Prompt</label>
+<textarea id="naisteraPrompt" placeholder="describe your image">a beautiful sunset over mountains</textarea>
+
+<div class="row">
+<div><label>Aspect Ratio</label>
+<select id="naisteraAspect">
+<option value="1:1">1:1 (Square)</option>
+<option value="16:9">16:9 (Landscape)</option>
+<option value="9:16">9:16 (Portrait)</option>
+<option value="3:2">3:2</option>
+<option value="2:3">2:3</option>
+</select></div>
+<div><label>Preset</label>
+<select id="naisteraPreset">
+<option value="">None</option>
+<option value="digital">Digital Art</option>
+<option value="realism">Realism</option>
+</select></div>
+<div><label>Count</label>
+<select id="naisteraCount">
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="4">4</option>
+</select></div>
+</div>
+
+<button onclick="generateNaistera()" style="margin-top:16px">Generate</button>
+<div id="naisteraStatus" style="display:none"></div>
+</div>
+<div id="naisteraResult"></div>
 </div>
 
 <div id="tab-inpaint" class="tab-content">
@@ -492,6 +533,42 @@ function trackCredits(count, facefix) {
     sessionCredits += cost;
     localStorage.setItem('pixai_session_credits', sessionCredits);
     document.getElementById('sessionCost').textContent = sessionCredits;
+}
+
+async function generateNaistera() {
+    const token = document.getElementById('naisteraToken').value;
+    const prompt = document.getElementById('naisteraPrompt').value;
+    const aspect = document.getElementById('naisteraAspect').value;
+    const preset = document.getElementById('naisteraPreset').value;
+    const count = parseInt(document.getElementById('naisteraCount').value);
+    const status = document.getElementById('naisteraStatus');
+    const result = document.getElementById('naisteraResult');
+    
+    if (!token) return alert('Enter Naistera token');
+    if (!prompt) return alert('Enter prompt');
+    
+    status.style.display = 'block';
+    status.textContent = 'Generating...';
+    result.innerHTML = '';
+    
+    try {
+        const res = await fetch('/naistera/v1/images/generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ prompt, aspect_ratio: aspect, preset, n: count })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        result.innerHTML = data.data.map(d => {
+            const url = 'data:image/png;base64,' + d.b64_json;
+            return '<div class="img-card"><img src="' + url + '" onclick="showModal(this.src)"><br><a href="' + url + '" download="naistera.png">Download</a></div>';
+        }).join('');
+        status.textContent = 'Done!';
+        addToHistory(prompt, data.data.map(d => 'data:image/png;base64,' + d.b64_json));
+    } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+    }
 }
 
 async function generate(addQueue = false) {
