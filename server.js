@@ -868,14 +868,21 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         }
         
         // Determine aspect ratio from width/height if not provided
+        // Naistera only supports: 1:1, 16:9, 9:16, 3:2, 2:3
         let ar = aspect_ratio;
         if (!ar && width && height) {
             const ratio = width / height;
-            if (ratio > 1.5) ar = '16:9';
-            else if (ratio < 0.67) ar = '9:16';
-            else if (ratio > 1.2) ar = '3:2';
-            else if (ratio < 0.83) ar = '2:3';
+            if (ratio > 1.7) ar = '16:9';
+            else if (ratio < 0.59) ar = '9:16';
+            else if (ratio > 1.4) ar = '3:2';
+            else if (ratio < 0.72) ar = '2:3';
             else ar = '1:1';
+        }
+        // Validate aspect ratio - default to 1:1 if invalid
+        const validRatios = ['1:1', '16:9', '9:16', '3:2', '2:3'];
+        if (ar && !validRatios.includes(ar)) {
+            console.log('Invalid aspect ratio:', ar, '- defaulting to 1:1');
+            ar = '1:1';
         }
         
         const params = new URLSearchParams({ token: apiKey });
