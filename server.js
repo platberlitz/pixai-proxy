@@ -944,8 +944,15 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
         if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
         
-        const { prompt, aspect_ratio, preset, n = 1, width, height } = req.body;
+        let { prompt, aspect_ratio, preset, n = 1, width, height, style } = req.body;
         if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
+        
+        // Add anime style prefix if style is anime or prompt doesn't have style tags
+        if (style === 'anime' || (!prompt.toLowerCase().includes('realistic') && !prompt.toLowerCase().includes('photo'))) {
+            if (!prompt.toLowerCase().includes('anime')) {
+                prompt = 'anime style, ' + prompt;
+            }
+        }
         
         // Determine aspect ratio from width/height if not provided
         let ar = aspect_ratio;
