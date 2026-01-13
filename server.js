@@ -947,11 +947,10 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         let { prompt, aspect_ratio, preset, n = 1, width, height, style } = req.body;
         if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
         
-        // Add anime style prefix if style is anime or prompt doesn't have style tags
-        if (style === 'anime' || (!prompt.toLowerCase().includes('realistic') && !prompt.toLowerCase().includes('photo'))) {
-            if (!prompt.toLowerCase().includes('anime')) {
-                prompt = 'anime style, ' + prompt;
-            }
+        // Force anime style unless explicitly requesting realistic/photo
+        const lowerPrompt = prompt.toLowerCase();
+        if (!lowerPrompt.includes('realistic') && !lowerPrompt.includes('photo') && !lowerPrompt.includes('3d render')) {
+            prompt = 'anime style, anime, 2d, ' + prompt;
         }
         
         // Determine aspect ratio from width/height if not provided
