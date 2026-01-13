@@ -890,11 +890,26 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         if (preset) params.append('preset', preset);
         
         const count = Math.min(n || 1, 4);
-        const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
-        console.log('Naistera request:', url.replace(apiKey, '***'), 'count:', count);
+        console.log('Naistera request:', 'count:', count);
         
-        // Generate in parallel
-        const promises = Array(count).fill().map(async () => {
+        // Add variety for multiple generations by slightly modifying prompt
+        const varietyWords = ['', ', detailed', ', beautiful', ', stunning', ', elegant', ', graceful', ', vibrant', ', atmospheric'];
+        
+        // Generate in parallel with slight prompt variations
+        const promises = Array(count).fill().map(async (_, i) => {
+            let variedPrompt = prompt;
+            if (count > 1) {
+                const variety = varietyWords[i % varietyWords.length];
+                variedPrompt = prompt + variety;
+            }
+            
+            const params = new URLSearchParams({ token: apiKey });
+            if (ar) params.append('aspect_ratio', ar);
+            if (preset) params.append('preset', preset);
+            
+            const url = `${NAISTERA_API}/${encodeURIComponent(variedPrompt)}?${params}`;
+            console.log(`Naistera request ${i+1}:`, url.replace(apiKey, '***').substring(0, 100) + '...');
+            
             const imgRes = await fetch(url);
             if (!imgRes.ok) {
                 const text = await imgRes.text();
