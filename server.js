@@ -60,308 +60,386 @@ app.get('/', auth, (req, res) => res.send(`
 <!DOCTYPE html><html><head><title>PixAI Proxy</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-*{box-sizing:border-box}body{font-family:system-ui;background:#1a1a2e;color:#eee;margin:0;padding:20px}
-.container{max-width:900px;margin:0 auto}
-h1{color:#e94560;margin-bottom:5px}h3{color:#e94560;margin:0 0 10px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
-.logout{color:#888;text-decoration:none;font-size:14px}.logout:hover{color:#e94560}
-.card{background:#16213e;padding:20px;border-radius:12px;margin-bottom:20px}
-.tabs{display:flex;gap:8px;margin-bottom:16px}
-.tab{padding:8px 16px;background:#0f0f23;border:none;border-radius:6px;color:#888;cursor:pointer}
-.tab.active{background:#e94560;color:#fff}
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--text-muted:#8b949e;--accent:#58a6ff;--accent-hover:#79c0ff;--success:#3fb950;--danger:#f85149;--input:#0d1117}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.container{max-width:960px;margin:0 auto;padding:24px}
+.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.header h1{font-size:24px;font-weight:600;display:flex;align-items:center;gap:10px}
+.header h1 span{background:linear-gradient(135deg,#58a6ff,#a371f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-right{display:flex;align-items:center;gap:16px}
+.credits{font-size:13px;color:var(--text-muted);background:var(--card);padding:6px 12px;border-radius:20px;border:1px solid var(--border)}
+.logout{color:var(--text-muted);text-decoration:none;font-size:13px;transition:color .2s}.logout:hover{color:var(--danger)}
+.tabs{display:flex;gap:4px;background:var(--card);padding:4px;border-radius:8px;margin-bottom:20px;overflow-x:auto}
+.tab{padding:8px 16px;background:transparent;border:none;border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap;transition:all .2s}
+.tab:hover{color:var(--text);background:var(--bg)}
+.tab.active{background:var(--accent);color:#fff}
 .tab-content{display:none}.tab-content.active{display:block}
-label{display:block;margin:12px 0 4px;font-size:14px;color:#aaa}
-input,textarea,select{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#0f0f23;color:#fff;font-size:14px}
-textarea{resize:vertical;min-height:80px}
-.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
-button{padding:10px 20px;background:#e94560;border:none;border-radius:6px;color:#fff;font-size:14px;cursor:pointer}
-button:hover{background:#ff6b6b}button:disabled{background:#555;cursor:wait}
-.btn-sm{padding:6px 12px;font-size:12px}
-.btn-secondary{background:#333}
-#result{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
-#status{padding:12px;background:#0f0f23;border-radius:6px;margin-top:12px;display:none}
-.img-card{background:#0f0f23;padding:8px;border-radius:8px;text-align:center;max-width:200px}
-.img-card img{max-width:100%;border-radius:4px;cursor:pointer}
-.img-card a{color:#e94560;font-size:12px}
-.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:400px;overflow-y:auto}
-.history-item{background:#0f0f23;padding:6px;border-radius:6px;cursor:pointer;position:relative}
-.history-item img{width:100%;border-radius:4px}
-.history-item:hover{outline:2px solid #e94560}
-.preset-item,.fav-item{background:#0f0f23;padding:10px;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
-.preset-item span,.fav-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.info{background:#0f0f23;padding:12px;border-radius:6px;font-size:13px;color:#888;margin-top:12px}
-.info code{background:#1a1a2e;padding:2px 6px;border-radius:4px;color:#e94560}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center}
-.modal img{max-width:90%;max-height:90%;border-radius:8px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.card-header{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-header svg{width:20px;height:20px}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:13px;font-weight:500;color:var(--text-muted);margin-bottom:6px}
+.form-hint{font-size:11px;color:var(--text-muted);margin-top:4px}
+input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--input);color:var(--text);font-size:14px;transition:border-color .2s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,0.15)}
+textarea{resize:vertical;min-height:80px;font-family:inherit}
+select{cursor:pointer}
+.row{display:grid;gap:12px}.row-2{grid-template-columns:1fr 1fr}.row-3{grid-template-columns:1fr 1fr 1fr}.row-4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:640px){.row-2,.row-3,.row-4{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--border)}
+.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-sm{padding:6px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.checkbox-group{display:flex;flex-wrap:wrap;gap:16px;margin-top:8px}
+.checkbox-label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.checkbox-label input{width:auto;margin:0}
+.status{padding:12px 16px;border-radius:8px;margin-top:16px;font-size:14px;display:none}
+.status.show{display:block}
+.status-info{background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);color:var(--accent)}
+.status-success{background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--success)}
+.status-error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--danger)}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:20px}
+.result-item{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:transform .2s}
+.result-item:hover{transform:translateY(-2px)}
+.result-item img{width:100%;display:block;cursor:pointer}
+.result-item-actions{padding:8px;display:flex;justify-content:center}
+.result-item-actions a{color:var(--accent);font-size:12px;text-decoration:none}
+.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:500px;overflow-y:auto}
+.history-item{border-radius:6px;overflow:hidden;cursor:pointer;transition:transform .2s;border:2px solid transparent}
+.history-item:hover{transform:scale(1.02);border-color:var(--accent)}
+.history-item img{width:100%;display:block}
+.list-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.list-item-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.list-item-actions{display:flex;gap:6px}
+.api-info{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:20px}
+.api-info-title{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.api-info code{background:var(--card);padding:2px 8px;border-radius:4px;font-size:13px;color:var(--accent)}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;justify-content:center;align-items:center}
+.modal.show{display:flex}
+.modal img{max-width:90vw;max-height:90vh;border-radius:8px}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:600;background:var(--accent);color:#fff;margin-left:6px}
+.divider{height:1px;background:var(--border);margin:20px 0}
+.section-title{font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 </style></head><body>
 <div class="container">
-<div class="header"><div><h1>🎨 PixAI Proxy</h1><small style="color:#666">Image Generation Dashboard</small></div><div><span id="creditDisplay" style="color:#888;margin-right:16px;"></span><a href="/logout" class="logout">Logout</a></div></div>
+<div class="header">
+<h1>🎨 <span>PixAI Proxy</span></h1>
+<div class="header-right">
+<div class="credits">Session: <span id="sessionCost">0</span> credits</div>
+<a href="/logout" class="logout">Sign out</a>
+</div>
+</div>
 
 <div class="tabs">
-<button class="tab active" onclick="showTab('generate')">Generate</button>
+<button class="tab active" onclick="showTab('pixai')">PixAI</button>
 <button class="tab" onclick="showTab('naistera')">Naistera</button>
-<button class="tab" onclick="showTab('inpaint')">Inpaint</button>
-<button class="tab" onclick="showTab('queue')">Queue <span id="queueCount"></span></button>
 <button class="tab" onclick="showTab('history')">History</button>
 <button class="tab" onclick="showTab('favorites')">Favorites</button>
 <button class="tab" onclick="showTab('presets')">Presets</button>
+<button class="tab" onclick="showTab('queue')">Queue<span id="queueCount" class="badge" style="display:none"></span></button>
 </div>
 
-<div id="tab-generate" class="tab-content active">
+<!-- PixAI Tab -->
+<div id="tab-pixai" class="tab-content active">
 <div class="card">
-<label>PixAI API Key</label>
-<input type="password" id="apiKey" placeholder="Get from pixai.art/en/profile/edit/api">
+<div class="card-header">⚙️ PixAI Settings</div>
 
-<label>Prompt <button class="btn-sm btn-secondary" onclick="saveFavorite()" style="float:right">⭐ Save</button></label>
-<textarea id="prompt" placeholder="describe your image">masterpiece, best quality, highly detailed, sharp focus, </textarea>
-
-<label>Negative Prompt</label>
-<textarea id="negative">lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, deformed, ugly, duplicate, morbid, mutilated, out of frame, mutation, disfigured, poorly drawn hands, poorly drawn face, extra limbs, malformed limbs, fused fingers, too many fingers, long neck</textarea>
-
-<label>Image URL (for img2img, optional)</label>
-<input id="imgUrl" placeholder="https://... or leave empty for txt2img">
-<div class="row">
-<div><label>Img2Img Strength</label><input type="number" id="imgStrength" value="0.7" min="0.1" max="1" step="0.1"></div>
+<div class="form-group">
+<label class="form-label">API Key</label>
+<input type="password" id="apiKey" placeholder="Get from pixai.art/profile/edit/api">
 </div>
 
-<label>LoRAs (id:weight, comma-separated)</label>
-<input id="loras" placeholder="1744880666293972790:0.7">
+<div class="row row-2">
+<div class="form-group">
+<label class="form-label">Model ID</label>
+<input id="model" value="1648918127446573124">
+<div class="form-hint">Find models at pixai.art/model</div>
+</div>
+<div class="form-group">
+<label class="form-label">LoRAs (id:weight)</label>
+<input id="loras" placeholder="1744880666293972790:0.7, ...">
+</div>
+</div>
 
-<div class="row">
-<div><label>Resolution</label>
-<select id="resolution" onchange="applyRes()">
-<option value="512x512">512×512</option>
-<option value="512x768" selected>512×768</option>
-<option value="768x512">768×512</option>
-<option value="768x1024">768×1024</option>
-<option value="1024x768">1024×768</option>
-<option value="1024x1024">1024×1024</option>
-<option value="custom">Custom</option>
-</select></div>
-<div><label>Count</label>
+<div class="divider"></div>
+<div class="section-title">Prompt</div>
+
+<div class="form-group">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<label class="form-label" style="margin:0">Prompt</label>
+<button class="btn btn-sm btn-secondary" onclick="saveFavorite()">⭐ Save</button>
+</div>
+<textarea id="prompt" style="margin-top:6px">masterpiece, best quality, highly detailed, </textarea>
+</div>
+
+<div class="form-group">
+<label class="form-label">Negative Prompt</label>
+<textarea id="negative">lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, blurry, deformed, ugly</textarea>
+</div>
+
+<div class="row row-2">
+<div class="form-group">
+<label class="form-label">Style Prefix</label>
+<select id="style">
+<option value="">None</option>
+<option value="anime, cel shading, vibrant colors, ">Anime</option>
+<option value="realistic, photorealistic, 8k uhd, ">Photorealistic</option>
+<option value="digital painting, concept art, ">Digital Art</option>
+<option value="oil painting, classical, ">Oil Painting</option>
+<option value="watercolor painting, ">Watercolor</option>
+<option value="pencil sketch, graphite, ">Pencil Sketch</option>
+<option value="pixel art, 16-bit, ">Pixel Art</option>
+<option value="3d render, octane render, ">3D Render</option>
+<option value="cyberpunk, neon lights, ">Cyberpunk</option>
+<option value="fantasy art, magical, ">Fantasy</option>
+<option value="manga style, screentone, ">Manga</option>
+<option value="chibi, kawaii, ">Chibi</option>
+<option value="studio ghibli style, ">Ghibli</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Image URL (img2img)</label>
+<input id="imgUrl" placeholder="Optional - leave empty for txt2img">
+</div>
+</div>
+
+<div class="divider"></div>
+<div class="section-title">Generation Parameters</div>
+
+<div class="row row-4">
+<div class="form-group">
+<label class="form-label">Width</label>
+<select id="width">
+<option value="512">512</option>
+<option value="576">576</option>
+<option value="640">640</option>
+<option value="704">704</option>
+<option value="768">768</option>
+<option value="832">832</option>
+<option value="896">896</option>
+<option value="960">960</option>
+<option value="1024">1024</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Height</label>
+<select id="height">
+<option value="512">512</option>
+<option value="576">576</option>
+<option value="640">640</option>
+<option value="704">704</option>
+<option value="768" selected>768</option>
+<option value="832">832</option>
+<option value="896">896</option>
+<option value="960">960</option>
+<option value="1024">1024</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Batch Size</label>
 <select id="count">
 <option value="1">1</option>
 <option value="2">2</option>
 <option value="4" selected>4</option>
-</select></div>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Seed</label>
+<input type="number" id="seed" value="-1">
+</div>
 </div>
 
-<div class="row" id="customRes" style="display:none">
-<div><label>Width</label><input type="number" id="width" value="512" step="64" min="512" max="1280"></div>
-<div><label>Height</label><input type="number" id="height" value="768" step="64" min="512" max="1280"></div>
-</div>
-
-<div class="row">
-<div><label>Model ID</label><input id="model" value="1648918127446573124"></div>
-<div><label>Sampler</label>
+<div class="row row-4">
+<div class="form-group">
+<label class="form-label">Sampler</label>
 <select id="sampler">
 <option value="Euler a">Euler a</option>
 <option value="Euler">Euler</option>
 <option value="DPM++ 2M Karras">DPM++ 2M Karras</option>
 <option value="DPM++ SDE Karras">DPM++ SDE Karras</option>
 <option value="DDIM">DDIM</option>
-</select></div>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Steps</label>
+<input type="number" id="steps" value="25" min="8" max="50">
+</div>
+<div class="form-group">
+<label class="form-label">CFG Scale</label>
+<input type="number" id="cfg" value="6" min="1" max="20" step="0.5">
+</div>
+<div class="form-group">
+<label class="form-label">Img2Img Strength</label>
+<input type="number" id="imgStrength" value="0.7" min="0.1" max="1" step="0.1">
+</div>
 </div>
 
-<div class="row">
-<div><label>Steps</label><input type="number" id="steps" value="25" min="8" max="50"></div>
-<div><label>CFG</label><input type="number" id="cfg" value="6" min="1" max="15" step="0.5"></div>
-<div><label>Seed</label><input type="number" id="seed" value="-1"></div>
-</div>
-
-<div class="row">
-<div><label>Style</label>
-<select id="style">
-<option value="">None</option>
-<option value="anime, cel shading, vibrant colors, ">Anime</option>
-<option value="realistic, photorealistic, hyperrealistic, 8k uhd, dslr, ">Photorealistic</option>
-<option value="digital painting, concept art, artstation, ">Digital Art</option>
-<option value="oil painting, classical, renaissance style, ">Oil Painting</option>
-<option value="watercolor painting, soft edges, flowing colors, ">Watercolor</option>
-<option value="pencil sketch, graphite, hand drawn, ">Pencil Sketch</option>
-<option value="ink drawing, lineart, pen and ink, ">Ink Drawing</option>
-<option value="pixel art, 16-bit, retro game style, ">Pixel Art</option>
-<option value="3d render, octane render, unreal engine 5, ">3D Render</option>
-<option value="cyberpunk, neon lights, futuristic, sci-fi, ">Cyberpunk</option>
-<option value="fantasy art, magical, ethereal, mystical, ">Fantasy</option>
-<option value="comic book style, bold lines, halftone, ">Comic Book</option>
-<option value="manga style, japanese comic, screentone, ">Manga</option>
-<option value="chibi, cute, kawaii, super deformed, ">Chibi</option>
-<option value="studio ghibli style, miyazaki, whimsical, ">Ghibli</option>
-<option value="ukiyo-e, japanese woodblock print, ">Ukiyo-e</option>
-<option value="art nouveau, ornate, decorative, mucha style, ">Art Nouveau</option>
-<option value="art deco, geometric, 1920s style, ">Art Deco</option>
-<option value="impressionist, monet style, soft brushstrokes, ">Impressionist</option>
-<option value="surrealist, dreamlike, dali style, ">Surrealist</option>
-<option value="pop art, warhol style, bold colors, ">Pop Art</option>
-<option value="minimalist, simple, clean lines, ">Minimalist</option>
-<option value="gothic, dark, macabre, victorian, ">Gothic</option>
-<option value="steampunk, victorian sci-fi, brass and gears, ">Steampunk</option>
-<option value="vaporwave, 80s aesthetic, synthwave, retrowave, ">Vaporwave</option>
-<option value="low poly, geometric, polygonal 3d, ">Low Poly</option>
-<option value="isometric, isometric view, game asset, ">Isometric</option>
-<option value="stained glass, colorful glass, cathedral, ">Stained Glass</option>
-<option value="graffiti art, street art, urban, ">Graffiti</option>
-<option value="charcoal drawing, smudged, dramatic shadows, ">Charcoal</option>
-<option value="pastel colors, soft, dreamy, light, ">Pastel</option>
-<option value="noir, black and white, high contrast, dramatic, ">Film Noir</option>
-<option value="vintage photo, old photograph, sepia, aged, ">Vintage Photo</option>
-<option value="polaroid, instant photo, nostalgic, ">Polaroid</option>
-<option value="cinematic, movie still, dramatic lighting, anamorphic, ">Cinematic</option>
-<option value="portrait photography, studio lighting, professional, ">Portrait</option>
-<option value="landscape photography, nature, scenic, ">Landscape</option>
-<option value="macro photography, close-up, detailed, ">Macro</option>
-<option value="abstract, non-representational, shapes and colors, ">Abstract</option>
-<option value="psychedelic, trippy, vibrant, kaleidoscopic, ">Psychedelic</option>
-<option value="dark fantasy, grimdark, elden ring style, ">Dark Fantasy</option>
-<option value="cute anime, moe, adorable, ">Moe Anime</option>
-<option value="90s anime, retro anime, vintage anime style, ">90s Anime</option>
-</select></div>
-<div><label>Upscale</label>
+<div class="row row-3">
+<div class="form-group">
+<label class="form-label">Upscale</label>
 <select id="upscale">
 <option value="1">None</option>
 <option value="1.5">1.5x</option>
 <option value="2">2x</option>
-</select></div>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Upscale Denoise</label>
+<input type="number" id="upscaleDenoise" value="0.4" min="0" max="1" step="0.1">
+</div>
+<div class="form-group" style="display:flex;align-items:end;padding-bottom:10px">
+<div class="checkbox-group">
+<label class="checkbox-label"><input type="checkbox" id="facefix"> Face Fix</label>
+<label class="checkbox-label"><input type="checkbox" id="tile"> Tile</label>
+</div>
+</div>
 </div>
 
-<div class="row" style="margin-top:12px">
-<label><input type="checkbox" id="facefix"> Face Fix</label>
-<label><input type="checkbox" id="tile"> ControlNet Tile</label>
+<div class="btn-group">
+<button class="btn btn-secondary" onclick="window.open('https://pixai.art/model','_blank')">🔍 Browse Models</button>
+<button class="btn btn-secondary" onclick="savePreset()">💾 Save Preset</button>
+<button class="btn btn-secondary" onclick="generate(true)">📋 Add to Queue</button>
+<button class="btn btn-primary" onclick="generate()" id="genBtn">🎨 Generate</button>
 </div>
 
-<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-<button onclick="window.open('https://pixai.art/model','_blank')" class="btn-secondary">🔍 Models</button>
-<button onclick="savePreset()">💾 Preset</button>
-<button onclick="generate(true)" class="btn-secondary">📋 Queue</button>
-<button onclick="generate()" id="genBtn">🎨 Generate</button>
-</div>
-<div id="status"></div>
-</div>
-<div id="result"></div>
+<div id="status" class="status"></div>
 </div>
 
+<div id="result" class="result-grid"></div>
+
+<div class="api-info">
+<div class="api-info-title">API Endpoint</div>
+<code>POST <span id="endpoint"></span>/v1/images/generations</code>
+<div class="form-hint" style="margin-top:8px">
+PixAI parameters: prompt, negative_prompt, width, height, model, n, steps, cfg_scale, sampler, seed, loras, facefix, upscale, upscaleDenoise, tile, image_url, strength
+</div>
+</div>
+</div>
+
+<!-- Naistera Tab -->
 <div id="tab-naistera" class="tab-content">
 <div class="card">
-<h3>🌟 Naistera</h3>
-<p style="color:#666;font-size:13px">Simple image generation via Naistera API</p>
+<div class="card-header">🌟 Naistera</div>
+<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Simple anime image generation. Get token from <a href="https://t.me/naistera_blocks_bot" target="_blank" style="color:var(--accent)">@naistera_blocks_bot</a> on Telegram.</p>
 
-<label>Naistera Token</label>
-<input type="password" id="naisteraToken" placeholder="Get from @naistera_blocks_bot on Telegram">
+<div class="form-group">
+<label class="form-label">Token</label>
+<input type="password" id="naisteraToken" placeholder="Your Naistera token">
+</div>
 
-<label>Prompt</label>
-<textarea id="naisteraPrompt" placeholder="describe your image">a beautiful sunset over mountains</textarea>
+<div class="form-group">
+<label class="form-label">Prompt</label>
+<textarea id="naisteraPrompt">1girl, anime, cute, smile, </textarea>
+<div class="form-hint">Anime style is auto-added. For realistic, include "realistic" or "photo" in prompt.</div>
+</div>
 
-<div class="row">
-<div><label>Aspect Ratio</label>
+<div class="row row-3">
+<div class="form-group">
+<label class="form-label">Aspect Ratio</label>
 <select id="naisteraAspect">
 <option value="1:1">1:1 (Square)</option>
-<option value="16:9">16:9 (Landscape)</option>
+<option value="16:9">16:9 (Wide)</option>
 <option value="9:16">9:16 (Portrait)</option>
 <option value="3:2">3:2</option>
 <option value="2:3">2:3</option>
-</select></div>
-<div><label>Preset</label>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Preset</label>
 <select id="naisteraPreset">
 <option value="">None</option>
-<option value="digital">Digital Art</option>
-<option value="realism">Realism</option>
-</select></div>
-<div><label>Count</label>
+<option value="digital">Digital (adds "digital art")</option>
+<option value="realism">Realism (adds "realistic image")</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">Count</label>
 <select id="naisteraCount">
 <option value="1">1</option>
 <option value="2">2</option>
 <option value="4">4</option>
-</select></div>
+</select>
+</div>
 </div>
 
-<button onclick="generateNaistera()" style="margin-top:16px">Generate</button>
-<div id="naisteraStatus" style="display:none"></div>
-</div>
-<div id="naisteraResult"></div>
+<div class="btn-group">
+<button class="btn btn-primary" onclick="generateNaistera()" id="naisteraBtn">🎨 Generate</button>
 </div>
 
-<div id="tab-inpaint" class="tab-content">
-<div class="card">
-<h3>🖌️ Inpainting</h3>
-<p style="color:#666;font-size:13px">Load an image, draw a mask over areas to regenerate, then generate.</p>
-
-<label>Image URL</label>
-<div class="row">
-<input id="inpaintUrl" placeholder="https://... image URL">
-<button onclick="loadInpaintImage()" class="btn-sm">Load</button>
+<div id="naisteraStatus" class="status"></div>
 </div>
 
-<div style="position:relative;margin:12px 0;background:#0f0f23;border-radius:8px;overflow:hidden;">
-<canvas id="inpaintCanvas" width="512" height="512" style="display:block;max-width:100%;cursor:crosshair;"></canvas>
+<div id="naisteraResult" class="result-grid"></div>
+
+<div class="api-info">
+<div class="api-info-title">API Endpoint</div>
+<code>POST <span class="endpoint-url"></span>/naistera/v1/images/generations</code>
+<div class="form-hint" style="margin-top:8px">
+<strong>Available parameters:</strong> prompt, aspect_ratio (1:1, 16:9, 9:16, 3:2, 2:3), preset (digital, realism), n (count)
+</div>
+<div class="form-hint">
+<strong>Note:</strong> Naistera has no sampler, steps, CFG, or model selection - it uses fixed settings on their backend.
+</div>
+</div>
 </div>
 
-<div class="row">
-<div><label>Brush Size</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
-<div><label>Strength</label><input type="number" id="inpaintStrength" value="0.8" min="0.1" max="1" step="0.1"></div>
-</div>
-
-<label>Prompt (what to generate in masked area)</label>
-<textarea id="inpaintPrompt" rows="2">masterpiece, best quality, </textarea>
-
-<div style="margin-top:12px;display:flex;gap:8px">
-<button onclick="clearMask()" class="btn-secondary">Clear Mask</button>
-<button onclick="generateInpaint()" id="inpaintBtn">🎨 Inpaint</button>
-</div>
-<div id="inpaintStatus" style="margin-top:8px;"></div>
-</div>
-<div id="inpaintResult"></div>
-</div>
-
+<!-- History Tab -->
 <div id="tab-history" class="tab-content">
 <div class="card">
-<h3>📜 Generation History</h3>
-<p style="color:#666;font-size:13px">Click an image to view full size. History is stored in your browser.</p>
+<div class="card-header">📜 Generation History</div>
+<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Click an image to view full size. Stored locally in your browser.</p>
 <div id="historyGrid" class="history-grid"></div>
-<button onclick="clearHistory()" class="btn-secondary btn-sm" style="margin-top:12px">Clear History</button>
+<div class="btn-group">
+<button class="btn btn-danger btn-sm" onclick="clearHistory()">Clear History</button>
+</div>
 </div>
 </div>
 
+<!-- Favorites Tab -->
 <div id="tab-favorites" class="tab-content">
 <div class="card">
-<h3>⭐ Favorite Prompts</h3>
+<div class="card-header">⭐ Favorite Prompts</div>
 <div id="favoritesList"></div>
 </div>
 </div>
 
+<!-- Presets Tab -->
 <div id="tab-presets" class="tab-content">
 <div class="card">
-<h3>💾 Model Presets</h3>
-<p style="color:#666;font-size:13px">Save model + LoRA + settings combinations for quick access.</p>
+<div class="card-header">💾 Model Presets</div>
+<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Save model + LoRA + settings combinations for quick access.</p>
 <div id="presetsList"></div>
 </div>
 </div>
 
+<!-- Queue Tab -->
 <div id="tab-queue" class="tab-content">
 <div class="card">
-<h3>📋 Generation Queue</h3>
-<p style="color:#666;font-size:13px">Queue multiple generations to run sequentially.</p>
+<div class="card-header">📋 Generation Queue</div>
+<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Queue multiple generations to run sequentially.</p>
 <div id="queueList"></div>
-<div style="margin-top:12px">
-<button onclick="processQueue()" id="processQueueBtn">▶️ Process Queue</button>
-<button onclick="clearQueue()" class="btn-secondary">Clear Queue</button>
+<div class="btn-group">
+<button class="btn btn-primary" onclick="processQueue()" id="processQueueBtn">▶️ Process Queue</button>
+<button class="btn btn-secondary" onclick="clearQueue()">Clear Queue</button>
 </div>
 </div>
 </div>
 
-<div class="info">
-<strong>API:</strong> <code>POST <span id="endpoint"></span>/v1</code> | <strong>Session Cost:</strong> <span id="sessionCost">0</span> credits (estimated)
-</div>
 </div>
 
-<div id="modal" class="modal" onclick="this.style.display='none'">
+<div id="modal" class="modal" onclick="this.classList.remove('show')">
 <img id="modalImg" src="">
 </div>
 
 <script>
 document.getElementById('endpoint').textContent=location.origin;
+document.querySelectorAll('.endpoint-url').forEach(el=>el.textContent=location.origin);
 
-const fields = ['apiKey','prompt','negative','loras','resolution','count','width','height','model','style','upscale','sampler','steps','cfg','seed','imgUrl','imgStrength'];
+const fields = ['apiKey','prompt','negative','loras','count','width','height','model','style','upscale','upscaleDenoise','sampler','steps','cfg','seed','imgUrl','imgStrength','naisteraToken','naisteraPrompt','naisteraAspect','naisteraPreset'];
 const checkboxes = ['facefix','tile'];
 
 function save() { 
@@ -371,7 +449,7 @@ function save() {
 function load() { 
     fields.forEach(f => { const v = localStorage.getItem('pixai_'+f); if(v && document.getElementById(f)) document.getElementById(f).value = v; });
     checkboxes.forEach(f => { if(document.getElementById(f)) document.getElementById(f).checked = localStorage.getItem('pixai_'+f) === 'true'; });
-    applyRes(); loadHistory(); loadFavorites(); loadPresets();
+    loadHistory(); loadFavorites(); loadPresets(); renderQueue();
 }
 window.onload = load;
 fields.forEach(f => document.getElementById(f)?.addEventListener('change', save));
@@ -385,32 +463,27 @@ function showTab(name) {
     document.getElementById('tab-'+name).classList.add('active');
 }
 
-function applyRes() {
-    const v = document.getElementById('resolution').value;
-    document.getElementById('customRes').style.display = v === 'custom' ? 'flex' : 'none';
-    if (v !== 'custom') {
-        const [w,h] = v.split('x');
-        document.getElementById('width').value = w;
-        document.getElementById('height').value = h;
-    }
+function showStatus(el, msg, type='info') {
+    el.className = 'status show status-'+type;
+    el.textContent = msg;
 }
 
 // History
 function getHistory() { return JSON.parse(localStorage.getItem('pixai_history') || '[]'); }
-function saveHistory(h) { localStorage.setItem('pixai_history', JSON.stringify(h.slice(0, 50))); }
+function saveHistoryData(h) { localStorage.setItem('pixai_history', JSON.stringify(h.slice(0, 100))); }
 function addToHistory(urls, prompt) {
     const h = getHistory();
     urls.forEach(url => h.unshift({ url, prompt, date: Date.now() }));
-    saveHistory(h); loadHistory();
+    saveHistoryData(h); loadHistory();
 }
 function loadHistory() {
     const h = getHistory();
-    document.getElementById('historyGrid').innerHTML = h.map((item, i) => 
-        '<div class="history-item" onclick="showModal(\\''+item.url+'\\')"><img src="'+item.url+'" loading="lazy"></div>'
-    ).join('') || '<p style="color:#666">No history yet</p>';
+    document.getElementById('historyGrid').innerHTML = h.map(item => 
+        '<div class="history-item" onclick="showModal(\\''+item.url.replace(/'/g,"\\\\'")+'\\')"><img src="'+item.url+'" loading="lazy"></div>'
+    ).join('') || '<p style="color:var(--text-muted)">No history yet</p>';
 }
 function clearHistory() { if(confirm('Clear all history?')) { localStorage.removeItem('pixai_history'); loadHistory(); } }
-function showModal(url) { document.getElementById('modalImg').src = url; document.getElementById('modal').style.display = 'flex'; }
+function showModal(url) { document.getElementById('modalImg').src = url; document.getElementById('modal').classList.add('show'); }
 
 // Favorites
 function getFavorites() { return JSON.parse(localStorage.getItem('pixai_favorites') || '[]'); }
@@ -426,10 +499,10 @@ function saveFavorite() {
 function loadFavorites() {
     const f = getFavorites();
     document.getElementById('favoritesList').innerHTML = f.map((item, i) => 
-        '<div class="fav-item"><span>'+item.prompt.substring(0,60)+'...</span><button class="btn-sm" onclick="useFavorite('+i+')">Use</button><button class="btn-sm btn-secondary" onclick="deleteFavorite('+i+')">✕</button></div>'
-    ).join('') || '<p style="color:#666">No favorites yet. Click ⭐ Save next to the prompt field.</p>';
+        '<div class="list-item"><span class="list-item-text">'+item.prompt.substring(0,80)+'</span><div class="list-item-actions"><button class="btn btn-sm btn-primary" onclick="useFavorite('+i+')">Use</button><button class="btn btn-sm btn-secondary" onclick="deleteFavorite('+i+')">✕</button></div></div>'
+    ).join('') || '<p style="color:var(--text-muted)">No favorites yet. Click ⭐ Save next to the prompt field.</p>';
 }
-function useFavorite(i) { document.getElementById('prompt').value = getFavorites()[i].prompt; showTab('generate'); }
+function useFavorite(i) { document.getElementById('prompt').value = getFavorites()[i].prompt; showTab('pixai'); save(); }
 function deleteFavorite(i) { const f = getFavorites(); f.splice(i, 1); saveFavorites(f); loadFavorites(); }
 
 // Presets
@@ -442,7 +515,8 @@ function savePreset() {
     p.unshift({
         name, model: document.getElementById('model').value, loras: document.getElementById('loras').value,
         sampler: document.getElementById('sampler').value, steps: document.getElementById('steps').value,
-        cfg: document.getElementById('cfg').value, resolution: document.getElementById('resolution').value,
+        cfg: document.getElementById('cfg').value, width: document.getElementById('width').value,
+        height: document.getElementById('height').value,
         facefix: document.getElementById('facefix').checked, date: Date.now()
     });
     savePresets(p); loadPresets();
@@ -450,8 +524,8 @@ function savePreset() {
 function loadPresets() {
     const p = getPresets();
     document.getElementById('presetsList').innerHTML = p.map((item, i) => 
-        '<div class="preset-item"><span>'+item.name+' ('+item.model.substring(0,10)+'...)</span><button class="btn-sm" onclick="usePreset('+i+')">Load</button><button class="btn-sm btn-secondary" onclick="deletePreset('+i+')">✕</button></div>'
-    ).join('') || '<p style="color:#666">No presets yet. Click 💾 Save Preset to create one.</p>';
+        '<div class="list-item"><span class="list-item-text">'+item.name+' (Model: '+item.model.substring(0,12)+'...)</span><div class="list-item-actions"><button class="btn btn-sm btn-primary" onclick="usePreset('+i+')">Load</button><button class="btn btn-sm btn-secondary" onclick="deletePreset('+i+')">✕</button></div></div>'
+    ).join('') || '<p style="color:var(--text-muted)">No presets yet. Click 💾 Save Preset to create one.</p>';
 }
 function usePreset(i) {
     const p = getPresets()[i];
@@ -460,18 +534,17 @@ function usePreset(i) {
     document.getElementById('sampler').value = p.sampler;
     document.getElementById('steps').value = p.steps;
     document.getElementById('cfg').value = p.cfg;
-    document.getElementById('resolution').value = p.resolution;
+    if(p.width) document.getElementById('width').value = p.width;
+    if(p.height) document.getElementById('height').value = p.height;
     document.getElementById('facefix').checked = p.facefix;
-    applyRes(); save(); showTab('generate');
+    save(); showTab('pixai');
 }
 function deletePreset(i) { const p = getPresets(); p.splice(i, 1); savePresets(p); loadPresets(); }
 
 // Queue
 let queue = [];
 let sessionCredits = parseInt(localStorage.getItem('pixai_session_credits') || '0');
-document.getElementById('sessionCost').textContent = sessionCredits;
 
-function getQueue() { return queue; }
 function addToQueue() {
     const style = document.getElementById('style').value;
     queue.push({
@@ -490,10 +563,12 @@ function addToQueue() {
     showTab('queue');
 }
 function renderQueue() {
-    document.getElementById('queueCount').textContent = queue.length ? '('+queue.length+')' : '';
+    const badge = document.getElementById('queueCount');
+    if(queue.length) { badge.textContent = queue.length; badge.style.display = 'inline-flex'; }
+    else { badge.style.display = 'none'; }
     document.getElementById('queueList').innerHTML = queue.map((item, i) => 
-        '<div class="preset-item"><span>'+item.prompt.substring(0,40)+'... ('+item.n+' imgs)</span><button class="btn-sm btn-secondary" onclick="removeFromQueue('+i+')">✕</button></div>'
-    ).join('') || '<p style="color:#666">Queue is empty. Use "Add to Queue" button when generating.</p>';
+        '<div class="list-item"><span class="list-item-text">'+item.prompt.substring(0,50)+'... ('+item.n+' imgs)</span><div class="list-item-actions"><button class="btn btn-sm btn-secondary" onclick="removeFromQueue('+i+')">✕</button></div></div>'
+    ).join('') || '<p style="color:var(--text-muted)">Queue is empty. Use "Add to Queue" button when generating.</p>';
 }
 function removeFromQueue(i) { queue.splice(i, 1); renderQueue(); }
 function clearQueue() { queue = []; renderQueue(); }
@@ -527,7 +602,7 @@ async function processQueue() {
     showTab('history');
 }
 
-// Cost tracking (estimates)
+// Cost tracking
 function trackCredits(count, facefix) {
     const cost = count * (facefix ? 2 : 1);
     sessionCredits += cost;
@@ -543,13 +618,15 @@ async function generateNaistera() {
     const count = parseInt(document.getElementById('naisteraCount').value);
     const status = document.getElementById('naisteraStatus');
     const result = document.getElementById('naisteraResult');
+    const btn = document.getElementById('naisteraBtn');
     
     if (!token) return alert('Enter Naistera token');
     if (!prompt) return alert('Enter prompt');
     
-    status.style.display = 'block';
-    status.textContent = 'Generating...';
+    btn.disabled = true;
+    showStatus(status, '⏳ Generating '+count+' image(s)...', 'info');
     result.innerHTML = '';
+    save();
     
     try {
         const res = await fetch('/naistera/v1/images/generations', {
@@ -558,16 +635,18 @@ async function generateNaistera() {
             body: JSON.stringify({ prompt, aspect_ratio: aspect, preset, n: count })
         });
         const data = await res.json();
-        if (data.error) throw new Error(data.error);
+        if (data.error) throw new Error(data.error.message || data.error);
         
-        result.innerHTML = data.data.map(d => {
-            const url = 'data:image/png;base64,' + d.b64_json;
-            return '<div class="img-card"><img src="' + url + '" onclick="showModal(this.src)"><br><a href="' + url + '" download="naistera.png">Download</a></div>';
-        }).join('');
-        status.textContent = 'Done!';
-        addToHistory(prompt, data.data.map(d => 'data:image/png;base64,' + d.b64_json));
+        const urls = data.data.map(d => 'data:image/png;base64,' + d.b64_json);
+        result.innerHTML = urls.map(url => 
+            '<div class="result-item"><img src="'+url+'" onclick="showModal(\\''+url.substring(0,50)+'...\\')"><div class="result-item-actions"><a href="'+url+'" download="naistera.png">Download</a></div></div>'
+        ).join('');
+        showStatus(status, '✅ Generated '+count+' image(s)', 'success');
+        addToHistory(urls, prompt);
     } catch (e) {
-        status.textContent = 'Error: ' + e.message;
+        showStatus(status, '❌ '+e.message, 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -584,8 +663,8 @@ async function generate(addQueue = false) {
     if (!document.getElementById('prompt').value) return alert('Enter a prompt');
     
     btn.disabled = true;
-    status.style.display = 'block';
     result.innerHTML = '';
+    save();
     
     const loraObj = {};
     document.getElementById('loras').value.split(',').filter(l => l.trim()).forEach(l => {
@@ -594,6 +673,7 @@ async function generate(addQueue = false) {
     });
     
     const upscale = parseFloat(document.getElementById('upscale').value);
+    const upscaleDenoise = parseFloat(document.getElementById('upscaleDenoise').value);
     const seed = parseInt(document.getElementById('seed').value);
     const imgUrl = document.getElementById('imgUrl').value.trim();
     const promptText = style + document.getElementById('prompt').value;
@@ -610,6 +690,7 @@ async function generate(addQueue = false) {
         seed: seed >= 0 ? seed : undefined,
         facefix: document.getElementById('facefix').checked,
         upscale: upscale > 1 ? upscale : undefined,
+        upscaleDenoise: upscale > 1 ? upscaleDenoise : undefined,
         tile: document.getElementById('tile').checked || undefined,
         image_url: imgUrl || undefined,
         strength: imgUrl ? parseFloat(document.getElementById('imgStrength').value) : undefined
@@ -617,7 +698,7 @@ async function generate(addQueue = false) {
     if (Object.keys(loraObj).length) body.loras = loraObj;
     
     try {
-        status.textContent = '⏳ Generating ' + count + ' image(s)...' + (imgUrl ? ' (img2img)' : '');
+        showStatus(status, '⏳ Generating '+count+' image(s)...'+(imgUrl?' (img2img)':''), 'info');
         const res = await fetch('/v1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
@@ -627,188 +708,19 @@ async function generate(addQueue = false) {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         if (data.data?.length) {
-            status.textContent = '✅ Done!';
+            showStatus(status, '✅ Generated '+data.data.length+' image(s)', 'success');
             const urls = data.data.map(d => d.url);
             addToHistory(urls, promptText);
             trackCredits(count, document.getElementById('facefix').checked);
-            result.innerHTML = urls.map(url => '<div class="img-card"><img src="'+url+'" onclick="showModal(\\''+url+'\\')"><br><a href="'+url+'" download>Download</a></div>').join('');
+            result.innerHTML = urls.map(url => '<div class="result-item"><img src="'+url+'" onclick="showModal(\\''+url+'\\')"><div class="result-item-actions"><a href="'+url+'" download>Download</a></div></div>').join('');
         } else throw new Error('No images returned');
     } catch(e) {
-        status.textContent = '❌ ' + e.message;
-    } finally {
-        btn.disabled = false;
-    }
-}
-renderQueue();
-
-// Inpainting
-let inpaintImg = null;
-let maskCanvas, maskCtx;
-let drawing = false;
-
-function loadInpaintImage() {
-    const url = document.getElementById('inpaintUrl').value;
-    if (!url) return alert('Enter image URL');
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-        inpaintImg = img;
-        const canvas = document.getElementById('inpaintCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        
-        // Create mask canvas
-        maskCanvas = document.createElement('canvas');
-        maskCanvas.width = img.width;
-        maskCanvas.height = img.height;
-        maskCtx = maskCanvas.getContext('2d');
-        maskCtx.fillStyle = 'black';
-        maskCtx.fillRect(0, 0, img.width, img.height);
-        
-        setupDrawing(canvas, ctx);
-    };
-    img.onerror = () => alert('Failed to load image');
-    img.src = url;
-}
-
-function setupDrawing(canvas, ctx) {
-    const getPos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-    };
-    
-    const draw = (e) => {
-        if (!drawing) return;
-        e.preventDefault();
-        const pos = getPos(e);
-        const size = parseInt(document.getElementById('brushSize').value);
-        
-        // Draw on visible canvas (red overlay)
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = 'red';
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, size/2, 0, Math.PI*2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        
-        // Draw on mask (white = inpaint area)
-        maskCtx.fillStyle = 'white';
-        maskCtx.beginPath();
-        maskCtx.arc(pos.x, pos.y, size/2, 0, Math.PI*2);
-        maskCtx.fill();
-    };
-    
-    canvas.onmousedown = canvas.ontouchstart = (e) => { drawing = true; draw(e); };
-    canvas.onmouseup = canvas.ontouchend = () => drawing = false;
-    canvas.onmousemove = canvas.ontouchmove = draw;
-    canvas.onmouseleave = () => drawing = false;
-}
-
-function clearMask() {
-    if (!inpaintImg) return;
-    const canvas = document.getElementById('inpaintCanvas');
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(inpaintImg, 0, 0);
-    maskCtx.fillStyle = 'black';
-    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-}
-
-async function generateInpaint() {
-    if (!inpaintImg || !maskCanvas) return alert('Load an image first');
-    const apiKey = document.getElementById('apiKey').value;
-    if (!apiKey) return alert('Enter API key in Generate tab');
-    
-    const btn = document.getElementById('inpaintBtn');
-    const status = document.getElementById('inpaintStatus');
-    btn.disabled = true;
-    status.textContent = '⏳ Uploading and generating...';
-    
-    try {
-        // Convert mask to data URL
-        const maskDataUrl = maskCanvas.toDataURL('image/png');
-        
-        const res = await fetch('/v1/inpaint', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-            body: JSON.stringify({
-                prompt: document.getElementById('inpaintPrompt').value,
-                image_url: document.getElementById('inpaintUrl').value,
-                mask_base64: maskDataUrl.split(',')[1],
-                strength: parseFloat(document.getElementById('inpaintStrength').value),
-                model: document.getElementById('model').value
-            })
-        });
-        
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        if (data.data?.[0]?.url) {
-            status.textContent = '✅ Done!';
-            document.getElementById('inpaintResult').innerHTML = '<div class="img-card"><img src="'+data.data[0].url+'" onclick="showModal(\\''+data.data[0].url+'\\')"><br><a href="'+data.data[0].url+'" download>Download</a></div>';
-            addToHistory([data.data[0].url], 'inpaint');
-        }
-    } catch(e) {
-        status.textContent = '❌ ' + e.message;
+        showStatus(status, '❌ '+e.message, 'error');
     } finally {
         btn.disabled = false;
     }
 }
 </script></body></html>`));
-
-// Inpaint endpoint
-app.post('/v1/inpaint', async (req, res) => {
-    const { prompt, image_url, mask_base64, strength = 0.8, model } = req.body;
-    const apiKey = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!apiKey) return res.status(401).json({ error: 'API key required' });
-    if (!image_url || !mask_base64) return res.status(400).json({ error: 'image_url and mask_base64 required' });
-    
-    try {
-        // Upload mask to get a URL (PixAI needs URL, not base64)
-        // For now, we'll use the image without mask and rely on strength
-        // Full inpainting would require uploading mask to a hosting service
-        
-        const params = {
-            prompts: prompt,
-            modelId: model || '1648918127446573124',
-            mediaUrl: image_url,
-            strength: strength,
-            width: 512,
-            height: 512
-        };
-        
-        const createRes = await fetch(`${PIXAI_API}/task`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ parameters: params })
-        });
-        
-        const createData = await createRes.json();
-        if (!createData.id) throw new Error(createData.message || 'Failed to create task');
-        const taskId = createData.id;
-        
-        for (let i = 0; i < 60; i++) {
-            await new Promise(r => setTimeout(r, 2000));
-            const statusRes = await fetch(`${PIXAI_API}/task/${taskId}`, {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
-            });
-            const task = await statusRes.json();
-            
-            if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
-                return res.json({ data: task.outputs.mediaUrls.filter(u => u).map(url => ({ url })) });
-            }
-            if (task.status === 'failed') throw new Error('Generation failed');
-        }
-        throw new Error('Timeout');
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 
 // API endpoint
 const handleGenerate = async (req, res) => {
