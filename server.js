@@ -79,13 +79,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 .card-header{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .card-header svg{width:20px;height:20px}
 .form-group{margin-bottom:16px}
+.form-group:last-child{margin-bottom:0}
 .form-label{display:block;font-size:13px;font-weight:500;color:var(--text-muted);margin-bottom:6px}
 .form-hint{font-size:11px;color:var(--text-muted);margin-top:4px}
 input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--input);color:var(--text);font-size:14px;transition:border-color .2s}
 input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,0.15)}
 textarea{resize:vertical;min-height:80px;font-family:inherit}
 select{cursor:pointer}
-.row{display:grid;gap:12px}.row-2{grid-template-columns:1fr 1fr}.row-3{grid-template-columns:1fr 1fr 1fr}.row-4{grid-template-columns:1fr 1fr 1fr 1fr}
+.row{display:grid;gap:12px}.row-2{grid-template-columns:repeat(2,1fr)}.row-3{grid-template-columns:repeat(3,1fr)}.row-4{grid-template-columns:repeat(4,1fr)}
 @media(max-width:640px){.row-2,.row-3,.row-4{grid-template-columns:1fr}}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
@@ -93,7 +94,7 @@ select{cursor:pointer}
 .btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{opacity:.9}
 .btn-sm{padding:6px 10px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 .checkbox-group{display:flex;flex-wrap:wrap;gap:16px;margin-top:8px}
 .checkbox-label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
 .checkbox-label input{width:auto;margin:0}
@@ -291,8 +292,9 @@ select{cursor:pointer}
 <label class="form-label">Upscale Denoise</label>
 <input type="number" id="upscaleDenoise" value="0.4" min="0" max="1" step="0.1">
 </div>
-<div class="form-group" style="display:flex;align-items:end;padding-bottom:10px">
-<div class="checkbox-group">
+<div class="form-group">
+<label class="form-label">Options</label>
+<div class="checkbox-group" style="margin-top:0">
 <label class="checkbox-label"><input type="checkbox" id="facefix"> Face Fix</label>
 <label class="checkbox-label"><input type="checkbox" id="tile"> Tile</label>
 </div>
