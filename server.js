@@ -12,31 +12,16 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({ secret: process.env.SESSION_SECRET || 'change-me-in-production', resave: false, saveUninitialized: false }));
 
-const PIXAI_API = 'https://api.pixai.art/v1';
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
+const PIXAI_API = 'https://api.pixai.art/v1', NAISTERA_API = 'https://naistera.org/prompt';
+const ADMIN_USER = process.env.ADMIN_USER || 'admin', ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
+const VALID_RATIOS = ['1:1', '16:9', '9:16', '3:2', '2:3'];
 
-// Webhook storage for completed tasks
+// Webhook storage
 const webhookResults = new Map();
+app.post('/webhook/:taskId', (req, res) => { webhookResults.set(req.params.taskId, req.body); setTimeout(() => webhookResults.delete(req.params.taskId), 300000); res.sendStatus(200); });
+app.get('/webhook/:taskId', (req, res) => { const r = webhookResults.get(req.params.taskId); res.json({ ready: !!r, data: r || null }); });
 
-// Webhook callback endpoint
-app.post('/webhook/:taskId', (req, res) => {
-    const { taskId } = req.params;
-    webhookResults.set(taskId, req.body);
-    setTimeout(() => webhookResults.delete(taskId), 300000); // Clean up after 5 min
-    res.sendStatus(200);
-});
-
-// Check webhook result
-app.get('/webhook/:taskId', (req, res) => {
-    const result = webhookResults.get(req.params.taskId);
-    res.json({ ready: !!result, data: result || null });
-});
-
-function auth(req, res, next) {
-    if (req.session.loggedIn) return next();
-    res.redirect('/login');
-}
+const auth = (req, res, next) => req.session.loggedIn ? next() : res.redirect('/login');
 
 app.get('/login', (req, res) => res.send(`
 <!DOCTYPE html><html><head><title>Login - PixAI Proxy</title>
@@ -795,57 +780,35 @@ app.post('/v1/images/generations', handleGenerate);
 app.post('/v1', handleGenerate);
 
 // Naistera proxy - OpenAI chat completions compatible
-const NAISTERA_API = 'https://naistera.org/prompt';
-
 app.post('/naistera/v1/chat/completions', async (req, res) => {
     try {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
         if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
         
-        const { messages, model } = req.body;
-        const lastMsg = messages?.filter(m => m.role === 'user').pop();
+        const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
         if (!lastMsg) return res.status(400).json({ error: 'No user message' });
         
-        // Extract prompt from message content
-        let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : 
-            lastMsg.content?.find(c => c.type === 'text')?.text || '';
-        
-        // Parse aspect ratio and preset from prompt or model name
+        let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
         let aspect_ratio = '1:1', preset = '';
+        
         const aspectMatch = prompt.match(/\[(\d+:\d+)\]/);
         if (aspectMatch) { aspect_ratio = aspectMatch[1]; prompt = prompt.replace(aspectMatch[0], '').trim(); }
         const presetMatch = prompt.match(/\[(digital|realism)\]/i);
         if (presetMatch) { preset = presetMatch[1].toLowerCase(); prompt = prompt.replace(presetMatch[0], '').trim(); }
         
-        // Build URL
         const params = new URLSearchParams({ token: apiKey });
         if (aspect_ratio) params.append('aspect_ratio', aspect_ratio);
         if (preset) params.append('preset', preset);
         
-        const url = `${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`;
-        const imgRes = await fetch(url);
-        
+        const imgRes = await fetch(`${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`);
         if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
         
-        const buffer = await imgRes.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-        const contentType = imgRes.headers.get('content-type') || 'image/png';
-        const dataUrl = `data:${contentType};base64,${base64}`;
+        const base64 = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
+        const dataUrl = `data:${imgRes.headers.get('content-type') || 'image/png'};base64,${base64}`;
         
-        // Return OpenAI-compatible response
         res.json({
-            id: 'naistera-' + Date.now(),
-            object: 'chat.completion',
-            created: Math.floor(Date.now() / 1000),
-            model: model || 'naistera',
-            choices: [{
-                index: 0,
-                message: {
-                    role: 'assistant',
-                    content: `![Generated Image](${dataUrl})`
-                },
-                finish_reason: 'stop'
-            }]
+            id: 'naistera-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'naistera',
+            choices: [{ index: 0, message: { role: 'assistant', content: `![Generated Image](${dataUrl})` }, finish_reason: 'stop' }]
         });
     } catch (e) {
         res.status(500).json({ error: { message: e.message } });
@@ -858,79 +821,42 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
         if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
         
-        let { prompt, aspect_ratio, preset, n = 1, width, height, style } = req.body;
+        let { prompt, aspect_ratio, preset, n = 1, width, height } = req.body;
         if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
         
-        // Limit prompt length to prevent timeouts (Naistera seems to struggle with very long prompts)
-        const maxPromptLength = 500;
-        if (prompt.length > maxPromptLength) {
-            prompt = prompt.substring(0, maxPromptLength).trim();
-            console.log('Naistera prompt truncated to', maxPromptLength, 'chars');
-        }
+        // Truncate long prompts
+        if (prompt.length > 500) prompt = prompt.substring(0, 500).trim();
         
         // Force anime style unless explicitly requesting realistic/photo
-        const lowerPrompt = prompt.toLowerCase();
-        if (!lowerPrompt.includes('realistic') && !lowerPrompt.includes('photo') && !lowerPrompt.includes('3d render')) {
+        const lp = prompt.toLowerCase();
+        if (!lp.includes('realistic') && !lp.includes('photo') && !lp.includes('3d render')) {
             prompt = 'anime style, anime, 2d, ' + prompt;
         }
         
         // Determine aspect ratio from width/height if not provided
-        // Naistera only supports: 1:1, 16:9, 9:16, 3:2, 2:3
         let ar = aspect_ratio;
         if (!ar && width && height) {
             const ratio = width / height;
-            if (ratio > 1.7) ar = '16:9';
-            else if (ratio < 0.59) ar = '9:16';
-            else if (ratio > 1.4) ar = '3:2';
-            else if (ratio < 0.72) ar = '2:3';
-            else ar = '1:1';
+            ar = ratio > 1.7 ? '16:9' : ratio < 0.59 ? '9:16' : ratio > 1.4 ? '3:2' : ratio < 0.72 ? '2:3' : '1:1';
         }
-        // Validate aspect ratio - default to 1:1 if invalid
-        const validRatios = ['1:1', '16:9', '9:16', '3:2', '2:3'];
-        if (ar && !validRatios.includes(ar)) {
-            console.log('Invalid aspect ratio:', ar, '- defaulting to 1:1');
-            ar = '1:1';
-        }
-        
-        const params = new URLSearchParams({ token: apiKey });
-        if (ar) params.append('aspect_ratio', ar);
-        if (preset) params.append('preset', preset);
+        if (ar && !VALID_RATIOS.includes(ar)) ar = '1:1';
         
         const count = Math.min(n || 1, 4);
-        console.log('Naistera request:', 'count:', count);
+        const varietyWords = ['', ', detailed', ', beautiful', ', stunning'];
         
-        // Add variety for multiple generations by slightly modifying prompt
-        const varietyWords = ['', ', detailed', ', beautiful', ', stunning', ', elegant', ', graceful', ', vibrant', ', atmospheric'];
-        
-        // Generate in parallel with slight prompt variations
-        const promises = Array(count).fill().map(async (_, i) => {
-            let variedPrompt = prompt;
-            if (count > 1) {
-                const variety = varietyWords[i % varietyWords.length];
-                variedPrompt = prompt + variety;
-            }
-            
+        const results = await Promise.all(Array(count).fill().map(async (_, i) => {
+            const variedPrompt = count > 1 ? prompt + varietyWords[i % varietyWords.length] : prompt;
             const params = new URLSearchParams({ token: apiKey });
             if (ar) params.append('aspect_ratio', ar);
             if (preset) params.append('preset', preset);
             
-            const url = `${NAISTERA_API}/${encodeURIComponent(variedPrompt)}?${params}`;
-            console.log(`Naistera request ${i+1}:`, url.replace(apiKey, '***').substring(0, 100) + '...');
-            
-            const imgRes = await fetch(url);
-            if (!imgRes.ok) {
-                const text = await imgRes.text();
-                throw new Error(`Naistera error: ${imgRes.status} - ${text}`);
-            }
-            const buffer = await imgRes.arrayBuffer();
-            return { b64_json: Buffer.from(buffer).toString('base64') };
-        });
-        
-        const results = await Promise.all(promises);
+            const imgRes = await fetch(`${NAISTERA_API}/${encodeURIComponent(variedPrompt)}?${params}`);
+            if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
+            return { b64_json: Buffer.from(await imgRes.arrayBuffer()).toString('base64') };
+        }));
         
         res.json({ data: results });
     } catch (e) {
-        console.error('Naistera proxy error:', e.message);
         res.status(500).json({ error: { message: e.message } });
     }
 });
