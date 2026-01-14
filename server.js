@@ -123,6 +123,7 @@ select{cursor:pointer}
 <div class="tabs">
 <button class="tab active" onclick="showTab('pixai')">PixAI</button>
 <button class="tab" onclick="showTab('naistera')">Naistera</button>
+<button class="tab" onclick="showTab('civitai')">Civitai</button>
 <button class="tab" onclick="showTab('history')">History</button>
 <button class="tab" onclick="showTab('favorites')">Favorites</button>
 <button class="tab" onclick="showTab('presets')">Presets</button>
@@ -374,6 +375,71 @@ PixAI parameters: prompt, negative_prompt, width, height, model, n, steps, cfg_s
 </div>
 </div>
 
+<!-- Civitai Tab -->
+<div id="tab-civitai" class="tab-content">
+<div class="card">
+<div class="card-header">🎯 Civitai</div>
+<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Generate images using Civitai models. Get API token from <a href="https://civitai.com/user/account" target="_blank" style="color:var(--accent)">civitai.com/user/account</a></p>
+
+<div class="form-group">
+<label class="form-label">API Token</label>
+<input type="password" id="civitaiToken" placeholder="Your Civitai API token">
+</div>
+
+<div class="form-group">
+<label class="form-label">Model AIR</label>
+<input id="civitaiModel" value="urn:air:sd1:checkpoint:civitai:4201@130072" placeholder="urn:air:sd1:checkpoint:civitai:MODEL@VERSION">
+<div class="form-hint">Find model AIRs on Civitai model pages</div>
+</div>
+
+<div class="form-group">
+<label class="form-label">Prompt</label>
+<textarea id="civitaiPrompt">masterpiece, best quality, </textarea>
+</div>
+
+<div class="form-group">
+<label class="form-label">Negative Prompt</label>
+<textarea id="civitaiNegative">lowres, bad anatomy, bad hands, text, error, worst quality, low quality</textarea>
+</div>
+
+<div class="row row-4">
+<div class="form-group">
+<label class="form-label">Width</label>
+<input type="number" id="civitaiWidth" value="512" min="512" max="1024" step="64">
+</div>
+<div class="form-group">
+<label class="form-label">Height</label>
+<input type="number" id="civitaiHeight" value="768" min="512" max="1024" step="64">
+</div>
+<div class="form-group">
+<label class="form-label">Steps</label>
+<input type="number" id="civitaiSteps" value="20" min="10" max="50">
+</div>
+<div class="form-group">
+<label class="form-label">CFG Scale</label>
+<input type="number" id="civitaiCfg" value="7" min="1" max="20" step="0.5">
+</div>
+</div>
+
+<div class="btn-group">
+<button class="btn btn-secondary" onclick="window.open('https://civitai.com/models','_blank')">🔍 Browse Models</button>
+<button class="btn btn-primary" onclick="generateCivitai()" id="civitaiBtn">🎨 Generate</button>
+</div>
+
+<div id="civitaiStatus" class="status"></div>
+</div>
+
+<div id="civitaiResult" class="result-grid"></div>
+
+<div class="api-info">
+<div class="api-info-title">API Endpoint</div>
+<code>POST <span class="endpoint-url"></span>/civitai/v1/images/generations</code>
+<div class="form-hint" style="margin-top:8px">
+<strong>Available parameters:</strong> prompt, negative_prompt, model (AIR), width, height, n, steps, cfg_scale, seed
+</div>
+</div>
+</div>
+
 <!-- History Tab -->
 <div id="tab-history" class="tab-content">
 <div class="card">
@@ -426,7 +492,7 @@ PixAI parameters: prompt, negative_prompt, width, height, model, n, steps, cfg_s
 document.getElementById('endpoint').textContent=location.origin;
 document.querySelectorAll('.endpoint-url').forEach(el=>el.textContent=location.origin);
 
-const fields = ['apiKey','prompt','negative','loras','count','width','height','model','style','upscale','upscaleDenoise','sampler','steps','cfg','seed','imgUrl','imgStrength','naisteraToken','naisteraPrompt','naisteraAspect','naisteraPreset'];
+const fields = ['apiKey','prompt','negative','loras','count','width','height','model','style','upscale','upscaleDenoise','sampler','steps','cfg','seed','imgUrl','imgStrength','naisteraToken','naisteraPrompt','naisteraAspect','naisteraPreset','civitaiToken','civitaiModel','civitaiPrompt','civitaiNegative','civitaiWidth','civitaiHeight','civitaiSteps','civitaiCfg'];
 const checkboxes = ['facefix','tile'];
 
 function save() { 
@@ -629,6 +695,49 @@ async function generateNaistera() {
             '<div class="result-item"><img src="'+url+'" onclick="showModal(\\''+url.substring(0,50)+'...\\')"><div class="result-item-actions"><a href="'+url+'" download="naistera.png">Download</a></div></div>'
         ).join('');
         showStatus(status, '✅ Generated '+count+' image(s)', 'success');
+        addToHistory(urls, prompt);
+    } catch (e) {
+        showStatus(status, '❌ '+e.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function generateCivitai() {
+    const token = document.getElementById('civitaiToken').value;
+    const model = document.getElementById('civitaiModel').value;
+    const prompt = document.getElementById('civitaiPrompt').value;
+    const negative = document.getElementById('civitaiNegative').value;
+    const width = parseInt(document.getElementById('civitaiWidth').value);
+    const height = parseInt(document.getElementById('civitaiHeight').value);
+    const steps = parseInt(document.getElementById('civitaiSteps').value);
+    const cfg = parseFloat(document.getElementById('civitaiCfg').value);
+    const status = document.getElementById('civitaiStatus');
+    const result = document.getElementById('civitaiResult');
+    const btn = document.getElementById('civitaiBtn');
+    
+    if (!token) return alert('Enter Civitai API token');
+    if (!prompt) return alert('Enter prompt');
+    
+    btn.disabled = true;
+    showStatus(status, '⏳ Generating image...', 'info');
+    result.innerHTML = '';
+    save();
+    
+    try {
+        const res = await fetch('/civitai/v1/images/generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ prompt, negative_prompt: negative, model, width, height, steps, cfg_scale: cfg, n: 1 })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || data.error);
+        
+        const urls = data.data.map(d => d.url);
+        result.innerHTML = urls.map(url => 
+            '<div class="result-item"><img src="'+url+'" onclick="showModal(\\''+url+'\\')"><div class="result-item-actions"><a href="'+url+'" download>Download</a></div></div>'
+        ).join('');
+        showStatus(status, '✅ Generated image', 'success');
         addToHistory(urls, prompt);
     } catch (e) {
         showStatus(status, '❌ '+e.message, 'error');
