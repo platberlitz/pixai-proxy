@@ -12,7 +12,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({ secret: process.env.SESSION_SECRET || 'change-me-in-production', resave: false, saveUninitialized: false }));
 
-const PIXAI_API = 'https://api.pixai.art/v1', NAISTERA_API = 'https://naistera.org/prompt';
+const PIXAI_API = 'https://api.pixai.art/v1', NAISTERA_API = 'https://naistera.org/prompt', CIVITAI_API = 'https://orchestration.civitai.com';
 const ADMIN_USER = process.env.ADMIN_USER || 'admin', ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
 const VALID_RATIOS = ['1:1', '16:9', '9:16', '3:2', '2:3'];
 
@@ -855,6 +855,104 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
             return { b64_json: Buffer.from(await imgRes.arrayBuffer()).toString('base64') };
         }));
         
+        res.json({ data: results });
+    } catch (e) {
+        res.status(500).json({ error: { message: e.message } });
+    }
+});
+
+// Civitai chat completions endpoint
+app.post('/civitai/v1/chat/completions', async (req, res) => {
+    try {
+        const apiKey = req.headers.authorization?.replace('Bearer ', '');
+        if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
+
+        const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
+        if (!lastMsg) return res.status(400).json({ error: { message: 'No user message' } });
+
+        let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
+        
+        // Parse model from prompt [model:urn:air:...] or use default
+        let model = 'urn:air:sd1:checkpoint:civitai:4201@130072';
+        const modelMatch = prompt.match(/\[model:(urn:air:[^\]]+)\]/i);
+        if (modelMatch) { model = modelMatch[1]; prompt = prompt.replace(modelMatch[0], '').trim(); }
+
+        // Parse dimensions [WxH]
+        let width = 512, height = 768;
+        const dimMatch = prompt.match(/\[(\d+)x(\d+)\]/);
+        if (dimMatch) { width = parseInt(dimMatch[1]); height = parseInt(dimMatch[2]); prompt = prompt.replace(dimMatch[0], '').trim(); }
+
+        const baseModel = model.toLowerCase().includes('sdxl') ? 'SDXL' : 'SD_1_5';
+        const jobInput = {
+            $type: 'textToImage',
+            baseModel,
+            model,
+            params: { prompt, negativePrompt: '', width: Math.min(1024, Math.max(512, width)), height: Math.min(1024, Math.max(512, height)), steps: 20, cfgScale: 7, seed: -1 }
+        };
+
+        const createRes = await fetch(`${CIVITAI_API}/v1/consumer/jobs`, {
+            method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(jobInput)
+        });
+        const createData = await createRes.json();
+        if (!createData.token) throw new Error(createData.message || 'Failed to create job');
+
+        // Poll for completion
+        for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const statusRes = await fetch(`${CIVITAI_API}/v1/consumer/jobs?token=${createData.token}`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+            const status = await statusRes.json();
+            const job = status.jobs?.[0];
+            if (job?.result?.blobUrl) {
+                return res.json({
+                    id: 'civitai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'civitai',
+                    choices: [{ index: 0, message: { role: 'assistant', content: `![Generated Image](${job.result.blobUrl})` }, finish_reason: 'stop' }]
+                });
+            }
+        }
+        throw new Error('Generation timeout');
+    } catch (e) {
+        res.status(500).json({ error: { message: e.message } });
+    }
+});
+
+// Civitai images/generations endpoint
+app.post('/civitai/v1/images/generations', async (req, res) => {
+    try {
+        const apiKey = req.headers.authorization?.replace('Bearer ', '');
+        if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
+
+        let { prompt, negative_prompt, model, width = 512, height = 768, n = 1, steps = 20, cfg_scale = 7, seed } = req.body;
+        if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
+
+        model = model || 'urn:air:sd1:checkpoint:civitai:4201@130072';
+        const baseModel = model.toLowerCase().includes('sdxl') ? 'SDXL' : 'SD_1_5';
+        const count = Math.min(n || 1, 4);
+
+        const results = [];
+        for (let i = 0; i < count; i++) {
+            const jobInput = {
+                $type: 'textToImage', baseModel, model,
+                params: { prompt, negativePrompt: negative_prompt || '', width: Math.min(1024, Math.max(512, width)), height: Math.min(1024, Math.max(512, height)), steps, cfgScale: cfg_scale, seed: seed >= 0 ? seed : -1 }
+            };
+
+            const createRes = await fetch(`${CIVITAI_API}/v1/consumer/jobs`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(jobInput)
+            });
+            const createData = await createRes.json();
+            if (!createData.token) throw new Error(createData.message || 'Failed to create job');
+
+            // Poll for completion
+            for (let j = 0; j < 60; j++) {
+                await new Promise(r => setTimeout(r, 2000));
+                const statusRes = await fetch(`${CIVITAI_API}/v1/consumer/jobs?token=${createData.token}`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+                const status = await statusRes.json();
+                const job = status.jobs?.[0];
+                if (job?.result?.blobUrl) { results.push({ url: job.result.blobUrl }); break; }
+            }
+        }
+
         res.json({ data: results });
     } catch (e) {
         res.status(500).json({ error: { message: e.message } });
