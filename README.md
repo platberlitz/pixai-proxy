@@ -1,7 +1,7 @@
 # PixAI Reverse Proxy
 
 ## TL;DR
-OpenAI-compatible proxy for PixAI and Naistera APIs with web dashboard. Handles task polling, batch generation, LoRAs, upscaling. Auto-adds anime style to Naistera. Login protected.
+OpenAI-compatible proxy for PixAI, Naistera, and Civitai APIs with web dashboard. Handles task polling, batch generation, LoRAs, upscaling. Auto-adds anime style to Naistera. Login protected.
 
 **Quick start:** `npm install → npm start → http://localhost:3000 → admin/admin`
 
@@ -11,7 +11,7 @@ Proxy server translating OpenAI-compatible requests to PixAI and Naistera APIs. 
 
 ## Why a Proxy?
 
-PixAI uses a task-based API (create task → poll → get results). Naistera returns images directly but isn't OpenAI-compatible. This proxy handles that complexity and exposes simple OpenAI-compatible endpoints.
+PixAI uses a task-based API (create task → poll → get results). Naistera returns images directly but isn't OpenAI-compatible. Civitai uses a job-based orchestration API. This proxy handles that complexity and exposes simple OpenAI-compatible endpoints.
 
 ## Features
 
@@ -121,6 +121,35 @@ PORT=3000
 
 Use `[aspect]` and `[preset]` in prompt to set options.
 
+### Civitai
+
+**Images Generation:**
+`POST /civitai/v1/images/generations`
+
+```json
+{
+  "prompt": "a beautiful landscape",
+  "negative_prompt": "blurry, low quality",
+  "model": "urn:air:sd1:checkpoint:civitai:4201@130072",
+  "width": 512,
+  "height": 768,
+  "n": 1,
+  "steps": 20,
+  "cfg_scale": 7
+}
+```
+
+**Chat Completions (OpenAI compatible):**
+`POST /civitai/v1/chat/completions`
+
+```json
+{
+  "messages": [{"role": "user", "content": "a beautiful landscape [512x768]"}]
+}
+```
+
+Use `[WxH]` for dimensions and `[model:urn:air:...]` to specify model AIR in prompt.
+
 ---
 
 ## Get API Credentials
@@ -131,6 +160,10 @@ Use `[aspect]` and `[preset]` in prompt to set options.
 
 ### Naistera
 - **Token:** Get from [@naistera_blocks_bot](https://t.me/naistera_blocks_bot) on Telegram
+
+### Civitai
+- **API Token:** https://civitai.com/user/account → API Keys
+- **Model AIRs:** Find on model pages (e.g., `urn:air:sd1:checkpoint:civitai:4201@130072`)
 
 ---
 
@@ -147,6 +180,11 @@ Works with [SillyTavern Quick Image Gen](https://github.com/platberlitz/sillytav
 1. Select **Reverse Proxy**
 2. Set URL to `https://your-proxy.com/naistera/v1/images/generations`
 3. Enter Naistera token
+
+**For Civitai:**
+1. Select **Reverse Proxy**
+2. Set URL to `https://your-proxy.com/civitai/v1/images/generations`
+3. Enter Civitai API token
 
 ---
 
