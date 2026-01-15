@@ -897,7 +897,17 @@ app.post('/v1/chat/completions', async (req, res) => {
     const prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
     
     try {
-        const params = { prompts: prompt, modelId: req.body.model || '1648918127446573124', width: 512, height: 768, batchSize: 1 };
+        const params = { prompts: prompt, modelId: req.body.model || '1648918127446573124', width: req.body.width || 512, height: req.body.height || 768, batchSize: 1 };
+        if (req.body.negative_prompt) params.negativePrompts = req.body.negative_prompt;
+        if (req.body.steps) params.samplingSteps = req.body.steps;
+        if (req.body.cfg_scale) params.cfgScale = req.body.cfg_scale;
+        if (req.body.sampler) params.samplingMethod = req.body.sampler;
+        if (req.body.loras && Array.isArray(req.body.loras)) {
+            params.lora = {};
+            req.body.loras.forEach(l => { if (l.id) params.lora[l.id] = l.weight || 0.7; });
+        }
+        if (req.body.facefix) params.enableADetailer = true;
+        
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({ parameters: params })
