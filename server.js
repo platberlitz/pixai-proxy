@@ -912,7 +912,7 @@ app.post('/v1/chat/completions', async (req, res) => {
             if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
                 const url = task.outputs.mediaUrls[0];
                 return res.json({ id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
-                    choices: [{ index: 0, message: { role: 'assistant', content: `![Generated Image](${url})` }, finish_reason: 'stop' }] });
+                    choices: [{ index: 0, message: { role: 'assistant', content: url, images: [{ url }] }, finish_reason: 'stop' }] });
             }
             if (task.status === 'failed') throw new Error('Generation failed');
         }
