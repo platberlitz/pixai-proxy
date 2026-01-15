@@ -888,6 +888,22 @@ const handleGenerate = async (req, res) => {
 app.post('/v1/images/generations', handleGenerate);
 app.post('/v1', handleGenerate);
 
+// PixAI chat completions (for compatibility)
+app.post('/v1/chat/completions', async (req, res) => {
+    const apiKey = req.headers.authorization?.replace('Bearer ', '');
+    if (!apiKey) return res.status(401).json({ error: 'API key required' });
+    const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
+    if (!lastMsg) return res.status(400).json({ error: 'No user message' });
+    const prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
+    req.body = { prompt, model: req.body.model };
+    handleGenerate(req, { json: (data) => {
+        if (data.error) return res.status(500).json({ error: { message: data.error } });
+        const url = data.data?.[0]?.url;
+        res.json({ id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
+            choices: [{ index: 0, message: { role: 'assistant', content: url ? `![Generated Image](${url})` : 'No image generated' }, finish_reason: 'stop' }] });
+    }, status: (code) => ({ json: (d) => res.status(code).json(d) }) });
+});
+
 // Naistera proxy - OpenAI chat completions compatible
 app.post('/naistera/v1/chat/completions', async (req, res) => {
     try {
