@@ -895,13 +895,31 @@ app.post('/v1/chat/completions', async (req, res) => {
     const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
     if (!lastMsg) return res.status(400).json({ error: 'No user message' });
     const prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
-    req.body = { prompt, model: req.body.model };
-    handleGenerate(req, { json: (data) => {
-        if (data.error) return res.status(500).json({ error: { message: data.error } });
-        const url = data.data?.[0]?.url;
-        res.json({ id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
-            choices: [{ index: 0, message: { role: 'assistant', content: url ? `![Generated Image](${url})` : 'No image generated' }, finish_reason: 'stop' }] });
-    }, status: (code) => ({ json: (d) => res.status(code).json(d) }) });
+    
+    try {
+        const params = { prompts: prompt, modelId: req.body.model || '1648918127446573124', width: 512, height: 768, batchSize: 1 };
+        const createRes = await fetch(`${PIXAI_API}/task`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ parameters: params })
+        });
+        const createData = await createRes.json();
+        if (!createData.id) throw new Error(createData.message || 'Failed to create task');
+        
+        for (let i = 0; i < 90; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const statusRes = await fetch(`${PIXAI_API}/task/${createData.id}`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+            const task = await statusRes.json();
+            if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
+                const url = task.outputs.mediaUrls[0];
+                return res.json({ id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
+                    choices: [{ index: 0, message: { role: 'assistant', content: `![Generated Image](${url})` }, finish_reason: 'stop' }] });
+            }
+            if (task.status === 'failed') throw new Error('Generation failed');
+        }
+        throw new Error('Timeout');
+    } catch (e) {
+        res.status(500).json({ error: { message: e.message } });
+    }
 });
 
 // Naistera proxy - OpenAI chat completions compatible
