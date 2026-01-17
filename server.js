@@ -822,9 +822,9 @@ async function generate(addQueue = false) {
 const handleGenerate = async (req, res) => {
     const { prompt, negative_prompt, width = 512, height = 768, model, n = 1, loras, facefix, upscale, upscaleDenoise, tile, steps, cfg_scale, sampler, seed, image_url, strength } = req.body;
     const apiKey = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!apiKey) return res.status(401).json({ error: 'API key required' });
-    
+
     try {
         const params = {
             prompts: prompt,
@@ -839,7 +839,7 @@ const handleGenerate = async (req, res) => {
         if (sampler) params.samplingMethod = sampler;
         if (seed !== undefined && seed >= 0) params.seed = seed;
         if (image_url) { params.mediaUrl = image_url; params.strength = strength || 0.7; }
-        
+
         if (loras) {
             if (Array.isArray(loras)) {
                 params.lora = {};
@@ -854,25 +854,25 @@ const handleGenerate = async (req, res) => {
             if (upscaleDenoise) params.upscaleDenoisingStrength = upscaleDenoise;
         }
         if (tile) params.enableTile = true;
-        
+
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({ parameters: params })
         });
-        
+
         const createData = await createRes.json();
         if (!createData.id) throw new Error(createData.message || 'Failed to create task');
         const taskId = createData.id;
-        
+
         for (let i = 0; i < 90; i++) {
             await new Promise(r => setTimeout(r, 2000));
-            
+
             const statusRes = await fetch(`${PIXAI_API}/task/${taskId}`, {
                 headers: { 'Authorization': `Bearer ${apiKey}` }
             });
             const task = await statusRes.json();
-            
+
             if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
                 return res.json({
                     data: task.outputs.mediaUrls.filter(u => u).map(url => ({ url }))
@@ -895,7 +895,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
     if (!lastMsg) return res.status(400).json({ error: 'No user message' });
     const prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
-    
+
     try {
         const params = { prompts: prompt, modelId: req.body.model || '1648918127446573124', width: req.body.width || 512, height: req.body.height || 768, batchSize: 1 };
         if (req.body.negative_prompt) params.negativePrompts = req.body.negative_prompt;
@@ -907,22 +907,24 @@ app.post('/v1/chat/completions', async (req, res) => {
             req.body.loras.forEach(l => { if (l.id) params.lora[l.id] = l.weight || 0.7; });
         }
         if (req.body.facefix) params.enableADetailer = true;
-        
+
         const createRes = await fetch(`${PIXAI_API}/task`, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({ parameters: params })
         });
         const createData = await createRes.json();
         if (!createData.id) throw new Error(createData.message || 'Failed to create task');
-        
+
         for (let i = 0; i < 90; i++) {
             await new Promise(r => setTimeout(r, 2000));
             const statusRes = await fetch(`${PIXAI_API}/task/${createData.id}`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
             const task = await statusRes.json();
             if (task.status === 'completed' && task.outputs?.mediaUrls?.length) {
                 const url = task.outputs.mediaUrls[0];
-                return res.json({ id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
-                    choices: [{ index: 0, message: { role: 'assistant', content: url, images: [{ url }] }, finish_reason: 'stop' }] });
+                return res.json({
+                    id: 'pixai-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'pixai',
+                    choices: [{ index: 0, message: { role: 'assistant', content: url, images: [{ url }] }, finish_reason: 'stop' }]
+                });
             }
             if (task.status === 'failed') throw new Error('Generation failed');
         }
@@ -937,28 +939,28 @@ app.post('/naistera/v1/chat/completions', async (req, res) => {
     try {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
         if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
-        
+
         const lastMsg = req.body.messages?.filter(m => m.role === 'user').pop();
         if (!lastMsg) return res.status(400).json({ error: 'No user message' });
-        
+
         let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
         let aspect_ratio = '1:1', preset = '';
-        
+
         const aspectMatch = prompt.match(/\[(\d+:\d+)\]/);
         if (aspectMatch) { aspect_ratio = aspectMatch[1]; prompt = prompt.replace(aspectMatch[0], '').trim(); }
         const presetMatch = prompt.match(/\[(digital|realism)\]/i);
         if (presetMatch) { preset = presetMatch[1].toLowerCase(); prompt = prompt.replace(presetMatch[0], '').trim(); }
-        
+
         const params = new URLSearchParams({ token: apiKey });
         if (aspect_ratio) params.append('aspect_ratio', aspect_ratio);
         if (preset) params.append('preset', preset);
-        
+
         const imgRes = await fetch(`${NAISTERA_API}/${encodeURIComponent(prompt)}?${params}`);
         if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
-        
+
         const base64 = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
         const dataUrl = `data:${imgRes.headers.get('content-type') || 'image/png'};base64,${base64}`;
-        
+
         res.json({
             id: 'naistera-' + Date.now(), object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: req.body.model || 'naistera',
             choices: [{ index: 0, message: { role: 'assistant', content: `![Generated Image](${dataUrl})` }, finish_reason: 'stop' }]
@@ -973,19 +975,19 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
     try {
         const apiKey = req.headers.authorization?.replace('Bearer ', '');
         if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
-        
+
         let { prompt, aspect_ratio, preset, n = 1, width, height } = req.body;
         if (!prompt) return res.status(400).json({ error: { message: 'Missing prompt' } });
-        
-        // Truncate long prompts
-        if (prompt.length > 500) prompt = prompt.substring(0, 500).trim();
-        
+
+        // Truncate long prompts - REMOVED per user request
+        // if (prompt.length > 500) prompt = prompt.substring(0, 500).trim();
+
         // Force anime style unless explicitly requesting realistic/photo
         const lp = prompt.toLowerCase();
         if (!lp.includes('realistic') && !lp.includes('photo') && !lp.includes('3d render')) {
             prompt = 'anime style, anime, 2d, ' + prompt;
         }
-        
+
         // Determine aspect ratio from width/height if not provided
         let ar = aspect_ratio;
         if (!ar && width && height) {
@@ -993,21 +995,21 @@ app.post('/naistera/v1/images/generations', async (req, res) => {
             ar = ratio > 1.7 ? '16:9' : ratio < 0.59 ? '9:16' : ratio > 1.4 ? '3:2' : ratio < 0.72 ? '2:3' : '1:1';
         }
         if (ar && !VALID_RATIOS.includes(ar)) ar = '1:1';
-        
+
         const count = Math.min(n || 1, 4);
         const varietyWords = ['', ', detailed', ', beautiful', ', stunning'];
-        
+
         const results = await Promise.all(Array(count).fill().map(async (_, i) => {
             const variedPrompt = count > 1 ? prompt + varietyWords[i % varietyWords.length] : prompt;
             const params = new URLSearchParams({ token: apiKey });
             if (ar) params.append('aspect_ratio', ar);
             if (preset) params.append('preset', preset);
-            
+
             const imgRes = await fetch(`${NAISTERA_API}/${encodeURIComponent(variedPrompt)}?${params}`);
             if (!imgRes.ok) throw new Error(`Naistera error: ${imgRes.status}`);
             return { b64_json: Buffer.from(await imgRes.arrayBuffer()).toString('base64') };
         }));
-        
+
         res.json({ data: results });
     } catch (e) {
         res.status(500).json({ error: { message: e.message } });
@@ -1024,7 +1026,7 @@ app.post('/civitai/v1/chat/completions', async (req, res) => {
         if (!lastMsg) return res.status(400).json({ error: { message: 'No user message' } });
 
         let prompt = typeof lastMsg.content === 'string' ? lastMsg.content : lastMsg.content?.find(c => c.type === 'text')?.text || '';
-        
+
         // Parse model from prompt [model:urn:air:...] or use default
         let model = 'urn:air:sd1:checkpoint:civitai:4201@130072';
         const modelMatch = prompt.match(/\[model:(urn:air:[^\]]+)\]/i);

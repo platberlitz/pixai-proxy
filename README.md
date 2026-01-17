@@ -36,7 +36,6 @@ PixAI uses a task-based API (create task → poll → get results). Naistera ret
 - 📐 **Aspect Ratios** - 1:1, 16:9, 9:16, 3:2, 2:3
 - 🎨 **Presets** - Digital Art, Realism
 - 🎲 **Variety Generation** - Multiple images with prompt variations
-- ✂️ **Auto-truncation** - Prompts limited to 500 chars to prevent timeouts
 - 🎌 **Auto-anime** - Automatically adds anime style unless realistic requested
 
 ### Organization
